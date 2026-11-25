@@ -12,7 +12,8 @@ button{cursor:pointer}
 .brand{display:flex;align-items:center;gap:11px}
 .brandmark{width:37px;height:37px;border-radius:10px;background:#d8b96c;color:#18352c;display:grid;place-items:center;font-family:serif;font-size:23px;font-weight:800}
 .brand strong{display:block;letter-spacing:1.5px;font-size:15px}.brand small{display:block;color:#b9cec3;font-size:10px;margin-top:2px}
-.top-actions{display:flex;align-items:center;gap:12px}.status{font-size:11px;color:#c6d8ce}
+.top-actions{display:flex;align-items:center;gap:10px}.status{font-size:11px;color:#c6d8ce}.status.err{color:#ffb0a0}
+.hint.err{color:var(--red)}
 .layout{display:grid;grid-template-columns:245px minmax(0,1fr);min-height:calc(100vh - 68px)}
 .sidebar{background:#fff;border-right:1px solid var(--line);padding:18px 13px;display:flex;flex-direction:column;gap:14px}
 .side-head{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px;padding:0 4px}
@@ -21,18 +22,20 @@ button{cursor:pointer}
 .lesson-entry:hover{background:#f3f6f3}.lesson-entry.selected{background:var(--green2);border-color:#b7d0c2}
 .lesson-entry strong{display:block;font-size:13px}.lesson-entry small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
 .side-foot{display:grid;gap:7px}
-.main{padding:27px clamp(15px,3vw,38px);max-width:1600px;width:100%;margin:auto}
+.main{padding:27px clamp(15px,3vw,38px);max-width:1600px;width:100%;margin:auto;min-width:0}
 .page-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:22px}
 .eyebrow{font-size:10px;letter-spacing:2px;color:var(--green);font-weight:800}
 .page-head h1{font-size:25px;margin:4px 0}.page-head p{font-size:12px;color:var(--muted);margin:0}
 .head-actions{display:flex;gap:7px}
 .btn{background:#fff;border:1px solid #cbd6cf;border-radius:8px;padding:9px 13px;font-size:12px;color:var(--ink);font-weight:600;touch-action:manipulation}
 .btn:hover{border-color:var(--green);background:#f7faf7}
+.btn:disabled{opacity:.5;cursor:wait}
 .btn.primary,.btn.on{background:var(--green);color:#fff;border-color:var(--green)}
 .btn.danger{color:var(--red)}.btn.small{padding:7px 10px;font-size:12px;min-height:34px}.btn.wide{width:100%;text-align:center}
+.top-actions .btn.small{background:#254438;color:#fff;border-color:#557064}
 .file-label{display:block}.file-label input{display:none}
-.tabs{display:flex;gap:5px;border-bottom:1px solid var(--line);margin-bottom:18px}
-.tab{padding:11px 16px;border:0;background:none;color:var(--muted);font-size:13px;border-bottom:2px solid transparent}
+.tabs{display:flex;gap:5px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
+.tab{padding:11px 16px;border:0;background:none;color:var(--muted);font-size:13px;border-bottom:2px solid transparent;white-space:nowrap}
 .tab.active{color:var(--green);font-weight:800;border-color:var(--green)}
 .tab-panel{display:none}.tab-panel.active{display:block}
 .editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -48,11 +51,13 @@ button{cursor:pointer}
 .hint{font-size:11px;color:var(--muted);font-weight:400}
 .full-card{grid-column:1/-1}
 .button-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}.button-row.end{justify-content:flex-end}
-.quick-add{margin:0 0 12px}
+.quick-add{margin:0 0 12px}.ai-row{margin:0 0 6px}
 
 /* 語句・文法の編集カード */
 .items-editor{display:grid;gap:10px}
 .item-card{border:1px solid #d5ded8;border-left:5px solid #b8c4bd;border-radius:10px;padding:10px 12px;background:#fcfdfc}
+.item-card.ai{background:#f7f3ff;border-color:#cdbdf0}
+.ai-note{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:12px;color:#5a3fa0;margin-bottom:8px}
 .item-card[data-t="古語"]{border-left-color:#d8b96c}.item-card[data-t="文法"],.item-card[data-t="助動詞"],.item-card[data-t="助動詞候補"]{border-left-color:#e48a8a}
 .item-card[data-t="助詞"],.item-card[data-t="係助詞"]{border-left-color:#e8a45c}.item-card[data-t="敬語"],.item-card[data-t="敬語候補"]{border-left-color:#a98bd6}
 .item-card[data-t="係り結び"]{border-left-color:#d9534f}.item-card[data-t="接続"]{border-left-color:#4fb3b3}.item-card[data-t="表現"]{border-left-color:#74b97a}
@@ -72,70 +77,75 @@ button{cursor:pointer}
 .check input{width:18px;height:18px}
 .range{font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .range input{width:84px}
+.adv summary{font-size:12px;color:var(--muted);cursor:pointer}.adv .toolbar-group{margin-top:8px}
 [data-tools]{display:contents}
 .swatches{display:inline-flex;gap:5px;align-items:center}
 .swatch{width:26px;height:26px;border-radius:50%;border:2px solid #9aa8a0;padding:0}
 .swatch.on{border-color:#111;box-shadow:0 0 0 2px #fff,0 0 0 4px #1d5945}
 input[type=color]{width:34px;height:28px;padding:1px;border:0;background:transparent;vertical-align:middle}
 .mark-y{background:#fff3b8}.mark-r{background:#ffd0d0}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid #cbd6cf;background:#fff;color:var(--ink);border-radius:999px;padding:5px 12px;font-size:12px}
+.chip.off{opacity:.45;text-decoration:line-through}.chip.all{background:#d8b96c;border-color:#d8b96c}
 .teacher-notes{margin-top:14px;font-size:13px;line-height:1.8}.teacher-notes summary{cursor:pointer;font-weight:700}.teacher-notes p{margin:6px 0;white-space:pre-wrap}
 .privacy-note{margin:9px 2px}
 
-/* ======== 板書（縦書き本文＋現代語訳・解説の2カラム） ======== */
-.board{background:var(--bd);color:#f5f1df;border-radius:12px;padding:clamp(14px,2.4vw,30px);font-family:"Yu Mincho","Hiragino Mincho ProN",serif;box-shadow:0 8px 25px #10251c18;position:relative;isolation:isolate;display:flex;flex-direction:column;font-size:1em}
-.board-top{display:flex;justify-content:space-between;color:#b8cbbd;font-family:system-ui,sans-serif;font-size:12px;border-bottom:1px solid var(--bdline);padding-bottom:8px}
-.board h2{font-size:clamp(24px,2.8vw,38px);margin:14px 0 4px;line-height:1.35}
-.board-source{font-family:system-ui,sans-serif;font-size:13px;color:#b8cbbd;margin-bottom:10px}
-.board h3{font-family:system-ui,sans-serif;font-size:clamp(14px,1.4vw,18px);margin:0 0 9px;padding-bottom:6px;border-bottom:1px solid var(--bdline);letter-spacing:.06em}
+/* ======== ステージ：1600x900固定→拡縮（端末・向き・全画面で配置が変わらない） ======== */
+.stage-wrap{position:relative;overflow:hidden;margin:0 auto;border-radius:12px;background:var(--bd);max-width:100%}
+.stage-wrap>.board{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0}
+.board{background:var(--bd);color:#f5f1df;padding:28px 36px 30px;font-family:"Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;position:relative;isolation:isolate;display:flex;flex-direction:column;overflow:hidden;
+ --o-px:64px;--t-px:38px;--w-px:34px;--lh:1.8;--ls:.06em}
+.board-head{display:flex;align-items:baseline;gap:20px;flex-wrap:nowrap;border-bottom:1px solid var(--bdline);padding-bottom:10px;margin-bottom:12px;font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif}
+.board-head h2{font-size:44px;margin:0;line-height:1.2;font-family:"Yu Mincho","Hiragino Mincho ProN",serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.board-source{font-size:22px;color:#b8cbbd;white-space:nowrap}
+.board-meta{margin-left:auto;display:flex;gap:18px;color:#b8cbbd;font-size:20px;white-space:nowrap}
 .yellow,.gold{color:var(--gold)}.cyan{color:var(--cyan)}.pink{color:var(--pink)}
-.board-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;height:clamp(440px,72vh,820px);margin-top:8px}
-.board-cols.no-left,.board-cols.no-orig{grid-template-columns:minmax(0,1fr)}
 
-/* 左：現代語訳・語句・文法（横書き） */
-.col-left{min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:12px;padding-right:4px;font-family:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;-webkit-overflow-scrolling:touch}
-.pane{background:#ffffff0a;border:1px solid #ffffff14;border-radius:10px;padding:12px 14px}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border:1px solid var(--bdline);background:#254438;color:#e7efe9;border-radius:999px;padding:5px 12px;font-size:13px}
-.chip.off{opacity:.4;text-decoration:line-through}.chip.all{background:var(--gold);color:#18352c;border-color:var(--gold)}
-.translation-text{font-size:clamp(17px,1.7vw,24px);line-height:1.85}
-.tr-block{display:flex;gap:9px;padding:6px 8px;border-radius:8px;cursor:pointer}
-.tr-block.active{background:#d8b96c2e;outline:1px solid #d8b96c88}
-.lno{flex:none;display:inline-flex;align-items:center;justify-content:center;writing-mode:horizontal-tb;min-width:1.5em;height:1.5em;padding:0 .3em;border-radius:999px;background:var(--gold);color:#18352c;font:700 .72em/1 system-ui,sans-serif;margin-top:.35em}
-.items{display:grid;gap:9px}
-.item{border-left:5px solid #b8c4bd;background:#ffffff0d;padding:9px 12px;border-radius:0 8px 8px 0;line-height:1.65;cursor:pointer}
-.item.focus{outline:2px solid var(--cyan);background:#8ed9e51a}
-.item-head{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
-.item .term{font-size:clamp(18px,1.8vw,26px);font-weight:700;color:var(--gold);font-family:"Yu Mincho","Hiragino Mincho ProN",serif}
-.item .tag{font-size:12px;padding:1px 9px;border-radius:999px;background:#ffffff1f;color:#f5f1df}
-.item .meta{font-size:clamp(13px,1.2vw,17px);color:#cfe0d5;margin-top:2px}
-.item .meaning{font-size:clamp(15px,1.4vw,20px);margin-top:3px}.item .meaning b{display:inline-block;font-size:.72em;background:#ffffff1f;border-radius:4px;padding:0 6px;margin-right:7px;font-weight:600}
-.item .explain{font-size:clamp(14px,1.35vw,19px);color:#f4f1e8;margin-top:3px;white-space:pre-wrap}
-.item[data-t="古語"]{border-left-color:#d8b96c}
-.item[data-t="文法"],.item[data-t="助動詞"],.item[data-t="助動詞候補"]{border-left-color:#ff9a9a}
-.item[data-t="助詞"],.item[data-t="係助詞"]{border-left-color:#ffb86b}
-.item[data-t="敬語"],.item[data-t="敬語候補"]{border-left-color:#c3a6f5}
-.item[data-t="係り結び"]{border-left-color:#ff6b6b}.item[data-t="接続"]{border-left-color:#5fd0d0}.item[data-t="表現"]{border-left-color:#8be28f}
-.empty{color:#b8cbbd;font-size:13px}
+/* 縦書きパネルを右から左へ並べる（右＝本文、左へ 現代語訳→語句→文法） */
+.board-cols{flex:1;min-height:0;display:flex;flex-direction:row-reverse;justify-content:flex-start;align-items:stretch;gap:22px;overflow:hidden}
+.board:not(.fit) .board-cols{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pane{writing-mode:vertical-rl;text-orientation:mixed;flex:none;height:100%;display:block;background:#ffffff0c;border:1px solid #ffffff1a;border-radius:12px;padding:16px 18px;overflow:hidden}
+.pane-orig{background:var(--bd2);font-size:var(--o-px)}
+.pane-tr{font-size:var(--t-px)}
+.pane-words,.pane-gram{font-size:var(--w-px)}
+.pane h3{margin:0 0 0 .5em;margin-inline-start:0;margin-block-end:.55em;padding:0 0 0 .35em;border-left:1px solid var(--bdline);font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;font-size:max(20px,.34em);letter-spacing:.2em;font-weight:700;white-space:nowrap}
+.vtext{display:block;line-height:var(--lh);letter-spacing:var(--ls);text-combine-upright:digits 2;line-break:strict}
+.vtext p{margin:0}
+.empty{color:#b8cbbd;font-size:.5em}
 
-/* 右：古文本文（縦書き・右から左） */
-.col-right{min-height:0;display:flex;flex-direction:column;background:var(--bd2);border:1px solid #ffffff14;border-radius:10px;padding:12px 16px}
-.original-text{flex:1;min-height:0;writing-mode:vertical-rl;text-orientation:mixed;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
- font-size:var(--o-size,1.9em);line-height:var(--o-lh,2);letter-spacing:var(--o-ls,.08em);padding:4px 6px;white-space:pre-wrap;line-break:strict;overflow-wrap:anywhere}
-.vline{margin:0;margin-block-end:.15em;padding-inline:0;border-radius:6px;cursor:pointer}
+/* 行（本文・現代語訳）。番号バッジは各行の先頭（上端）に置き、対応関係を示す */
+.vline{margin-block-end:.1em;border-radius:6px;cursor:pointer;padding-block-start:.05em}
 .vline.active{background:#d8b96c26;outline:1px solid #d8b96c77}
-.vline .lno{display:inline-flex;margin:0 0 .5em;margin-inline-end:0;font-size:.4em;margin-top:0;transform:none}
+.lno{display:block;writing-mode:horizontal-tb;width:1.35em;height:1.35em;border-radius:50%;background:var(--gold);color:#18352c;font:700 .38em/1.35em system-ui,sans-serif;text-align:center;margin:0 auto .25em;letter-spacing:0}
+.vline.tr .lno{background:var(--cyan)}
 .ch{border-radius:.12em}
 .ch.m1{background:#f1d47766;color:#fff}.ch.m2{background:#ff7b7b73;color:#fff}
 .ch.hit{outline:2px solid var(--cyan);background:#8ed9e540}
-.col-right .empty{writing-mode:horizontal-tb}
 
-/* 手書きレイヤー */
-.draw-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;touch-action:none;border-radius:inherit}
+/* 語句・文法カード（縦書き） */
+.items .item{display:block;height:fit-content;max-height:100%;margin-block-end:.35em;padding:.1em .35em;border-right:6px solid #b8c4bd;background:#ffffff0d;border-radius:8px;line-height:1.5;cursor:pointer}
+.items .item.focus{outline:2px solid var(--cyan);background:#8ed9e51a}
+.items .item>div{margin-block-end:.12em}
+.item-head{white-space:nowrap}
+.item .term{font-weight:700;color:var(--gold);font-size:1em}
+.item .tag{font-family:system-ui,sans-serif;font-size:.42em;padding:.15em .5em;border-radius:999px;background:#ffffff1f;color:#f5f1df;margin-block-start:.4em;display:inline-block;writing-mode:horizontal-tb;line-height:1.3;letter-spacing:0}
+.item .tag.ai{background:#7a5cc9}
+.item .meta{font-size:.62em;color:#cfe0d5}
+.item .meaning{font-size:.74em}
+.item .explain{font-size:.7em;color:#f4f1e8}
+.item[data-t="古語"]{border-right-color:#d8b96c}
+.item[data-t="文法"],.item[data-t="助動詞"],.item[data-t="助動詞候補"]{border-right-color:#ff9a9a}
+.item[data-t="助詞"],.item[data-t="係助詞"]{border-right-color:#ffb86b}
+.item[data-t="敬語"],.item[data-t="敬語候補"]{border-right-color:#c3a6f5}
+.item[data-t="係り結び"]{border-right-color:#ff6b6b}.item[data-t="接続"]{border-right-color:#5fd0d0}.item[data-t="表現"]{border-right-color:#8be28f}
+
+/* 手書きレイヤー（ステージと同じ座標系） */
+.draw-canvas{position:absolute;left:0;top:0;width:1600px;height:900px;z-index:4;pointer-events:none;touch-action:none}
 .drawing-board.drawing-enabled .draw-canvas{pointer-events:auto;cursor:crosshair}
 .drawing-board.drawing-enabled{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 
 /* ======== 投影モード ======== */
-.presentation{position:fixed;inset:0;background:#10251e;z-index:20;padding:10px 12px;display:flex;flex-direction:column;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+.presentation{position:fixed;inset:0;background:#10251e;z-index:20;padding:8px 10px;display:flex;flex-direction:column;padding-bottom:max(8px,env(safe-area-inset-bottom))}
 .presentation-bar{display:grid;gap:6px;color:#d7e4db;padding:0 2px 8px;font-size:12px}
 .pb-row{display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap}
 .pb-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -143,23 +153,22 @@ input[type=color]{width:34px;height:28px;padding:1px;border:0;background:transpa
 .presentation-bar .btn{background:#254438;color:#fff;border-color:var(--bdline)}
 .presentation-bar .btn.primary,.presentation-bar .btn.on{background:#d8b96c;color:#18352c;border-color:#d8b96c}
 .presentation-bar .range,.presentation-bar .check{color:#d7e4db}
-.presentation-bar .mark-y,.presentation-bar .mark-r{color:#fff}
-.presentation-bar .mark-y{background:#8a7a2a}.presentation-bar .mark-r{background:#8a3a3a}
-.presentation-board{flex:1;min-height:0;overflow:hidden;border-radius:8px;box-shadow:none;padding:clamp(14px,2.2vw,34px)}
-.presentation-board .board-cols{flex:1;height:auto;min-height:0}
-.presentation-board h2{font-size:clamp(28px,3.6vw,52px)}
-.presentation-board .translation-text{font-size:clamp(20px,2.3vw,34px)}
-.presentation-board .item .term{font-size:clamp(22px,2.4vw,36px)}
-.presentation-board .item .meta{font-size:clamp(15px,1.6vw,23px)}
-.presentation-board .item .meaning{font-size:clamp(17px,1.9vw,28px)}
-.presentation-board .item .explain{font-size:clamp(16px,1.8vw,26px)}
-.presentation-board .original-text{font-size:var(--o-size,1.9em)}
-.presentation-foot{display:flex;justify-content:space-between;color:#a9bdb1;font-size:11px;padding:8px 4px 0}
+.presentation-bar .chip{background:#254438;color:#fff;border-color:var(--bdline)}
+.presentation-bar .mark-y{background:#8a7a2a;color:#fff}.presentation-bar .mark-r{background:#8a3a3a;color:#fff}
+.stage-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.stage-area .stage-wrap{max-width:none}
+.presentation-foot{display:flex;justify-content:space-between;color:#a9bdb1;font-size:11px;padding:6px 4px 0}
+.pres-handle{position:absolute;right:10px;bottom:10px;z-index:30;opacity:.35;background:#254438;color:#fff;border:1px solid var(--bdline);border-radius:999px;padding:8px 14px;font-size:12px}
+.pres-handle:hover,.pres-handle.on{opacity:1}
 #toast{position:fixed;bottom:18px;left:50%;transform:translate(-50%,20px);background:#18352c;color:#fff;padding:10px 16px;border-radius:9px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:92vw;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 
-.guide{max-width:850px;line-height:1.9}.guide h2{margin-top:0}.guide h3{margin:24px 0 5px}.guide li{margin:7px 0}
-.callout{background:#fff5df;border:1px solid #f0dcae;padding:12px;border-radius:8px;font-size:12px;margin-top:20px}
+.guide{max-width:850px;line-height:1.9;margin-bottom:14px}.guide h2{margin-top:0}.guide h3{margin:24px 0 5px}.guide li{margin:7px 0}
+.guide input,.guide textarea{display:block;width:100%;margin-top:6px;padding:10px 11px;border:1px solid #d5ded8;border-radius:7px;background:#fbfcfb;font-size:14px}
+.guide label{font-size:12px;font-weight:700;color:#45534b}
+.sync-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.callout{background:#fff5df;border:1px solid #f0dcae;padding:12px;border-radius:8px;font-size:12px;margin-top:16px;line-height:1.7}
+code{background:#eef2ef;padding:1px 5px;border-radius:4px}
 
 /* ---- レスポンシブ ---- */
 @media(max-width:1100px){.ic-head{grid-template-columns:110px minmax(0,1fr)}.ic-ops{grid-column:1/-1}}
@@ -167,15 +176,11 @@ input[type=color]{width:34px;height:28px;padding:1px;border:0;background:transpa
  .layout{grid-template-columns:1fr}.sidebar{border-right:0;border-bottom:1px solid var(--line);padding:10px 13px}
  .lesson-list{flex-direction:row;overflow-x:auto}.lesson-entry{min-width:145px}.side-foot{grid-template-columns:1fr 1fr}
  .main{padding:20px 13px}.editor-grid{grid-template-columns:1fr}.full-card{grid-column:auto}
- .page-head h1{font-size:21px}.ic-grid,.ic-grid2{grid-template-columns:1fr}
-}
-@media(max-width:680px){
- .board-cols{grid-template-columns:1fr;height:auto}
- .col-right{order:-1;height:56vh}.col-left{overflow:visible}
- .presentation-board{overflow:auto}.presentation-board .board-cols{height:auto}
+ .page-head h1{font-size:21px}.ic-grid,.ic-grid2,.sync-grid{grid-template-columns:1fr}
+ .top-actions .status{display:none}
 }
 @media(max-width:500px){
- .topbar{padding:0 12px;height:60px}.status{display:none}.brand strong{font-size:13px}
+ .topbar{padding:0 12px;height:60px}.brand strong{font-size:13px}
  .page-head{align-items:flex-start}.head-actions{flex-direction:column}.tabs .tab{padding:10px 11px;font-size:12px}.two{grid-template-columns:1fr}
 }
 
@@ -184,10 +189,11 @@ input[type=color]{width:34px;height:28px;padding:1px;border:0;background:transpa
  body{background:#fff}
  .topbar,.sidebar,.page-head,.tabs,.board-tools,.privacy-note,.teacher-notes,.presentation{display:none!important}
  .layout{display:block}.main{padding:0}.tab-panel{display:none!important}#tab-board{display:block!important}
- .board{background:#fff!important;color:#111!important;box-shadow:none;border:0}
- .board-cols{height:auto!important}.col-left,.col-right,.pane{background:#fff!important;border-color:#999!important;overflow:visible!important}
- .board-top,.board h3,.item .term,.item .meta,.item .meaning,.item .explain,.item .tag,.chips{color:#111!important}
- .yellow,.cyan,.pink,.gold{color:#111!important}.item{background:#fff;border-color:#777}
- .original-text{overflow:visible!important;height:auto!important;min-height:60vh}
+ .stage-wrap{border-radius:0}
+ .board{background:#fff!important;color:#111!important}
+ .pane,.pane-orig{background:#fff!important;border-color:#999!important}
+ .board-head,.board-source,.board-meta,.pane h3,.item .term,.item .meta,.item .meaning,.item .explain,.item .tag{color:#111!important}
+ .yellow,.cyan,.pink,.gold{color:#111!important}.items .item{background:#fff;border-right-color:#777}
+ .ch.m1,.ch.m2,.ch.hit{color:#111}
  .draw-canvas{display:none!important}
 }

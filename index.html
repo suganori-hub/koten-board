@@ -54,7 +54,8 @@
       <button class="btn small" data-add="その他">＋ その他</button>
      </div>
      <div id="items-editor" class="items-editor"></div>
-     <div class="button-row"><button id="suggest-grammar" class="btn">本文から文法候補を抽出</button><span class="hint">候補は機械的な検索です。必ず教科書・文脈で確認してください。</span></div>
+     <div class="button-row ai-row"><button id="ai-fill" class="btn primary">✨ AIで語句・文法を自動入力</button><span id="ai-status" class="hint">本文を元に、重要語句・品詞・活用・意味・文法の説明（と空欄なら現代語訳）をAIが下書きします。</span></div>
+     <div class="button-row"><button id="suggest-grammar" class="btn">本文から文法候補を抽出（機械的）</button><span class="hint">候補は機械的な検索です。必ず教科書・文脈で確認してください。</span></div>
     </div>
     <div class="card editor-card full-card">
      <div class="card-title"><div><span class="step">04</span><strong>教師用メモ・発問</strong></div><span class="hint">投影画面には表示されません</span></div>
@@ -77,6 +78,7 @@
      <div class="toolbar-group">
       <label class="check"><input type="checkbox" class="auto-fit">自動で大きく</label>
       <label class="check"><input type="checkbox" class="hdr-toggle">見出し</label>
+      <label class="check"><input type="checkbox" class="brk-toggle">「。」で改行</label>
       <button id="print-board" class="btn small">印刷 / PDF</button>
      </div>
     </div>
@@ -97,10 +99,20 @@
    </div>
    <div id="stage-b" class="stage-wrap"><div id="board" class="board drawing-board"></div></div>
    <details class="card teacher-notes"><summary>教師用メモ（投影されません）</summary><p><b>目標：</b><span id="tn-goal"></span></p><p id="tn-notes"></p></details>
-   <p class="hint privacy-note">表示する項目だけが画面いっぱいに大きく表示されます。本文の文字を選択して「強調」を押すと色が付きます。同じ番号の本文・現代語訳はタップで相互にハイライト、語句カードをタップすると本文中の該当箇所が光ります。</p>
+   <p class="hint privacy-note">すべて縦書きで、右から本文→現代語訳→語句→文法の順に並びます。表示する項目だけが画面いっぱいに大きく表示されます。本文の文字を選択して「強調」を押すと色が付きます。同じ番号の本文・現代語訳はタップで相互にハイライト、語句カードをタップすると本文中の該当箇所が光ります。</p>
   </section>
 
   <section id="tab-guide" class="tab-panel">
+   <div class="card guide ai-card">
+    <h2>AI自動入力の設定</h2>
+    <p>「教材編集」の「✨ AIで語句・文法を自動入力」で使います。あなた自身の <b>Anthropic APIキー</b>（<a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a> で発行）を、この端末にだけ保存します。利用料はキーの持ち主（APIの従量課金）にかかります。キーが無ければ、このボタンは使われず他の機能に影響しません。</p>
+    <div class="sync-grid">
+     <label>APIキー<input id="ai-key" type="password" placeholder="sk-ant-…（この端末にだけ保存）" autocomplete="off"></label>
+     <label>モデル（空欄＝標準）<input id="ai-model" placeholder="claude-sonnet-5-5" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    </div>
+    <div class="button-row"><button id="ai-save" class="btn primary">保存</button><button id="ai-remove" class="btn danger">キーを削除</button><span id="ai-state" class="hint"></span></div>
+    <div class="callout">自動入力時、<b>本文（と既存の語句名）がAnthropicのサーバーに送信</b>されます。生徒の個人情報は入力しないでください。AIの出力は<b>下書き</b>で、誤りが含まれることがあります（特に活用形・助動詞の識別）。各項目の「AI下書き」表示は、あなたが「確認済み」を押すまで残り、板書プレビューにも「AI下書き」と表示されます（投影画面には出ません）。APIキーは同期されません。端末ごとに登録してください。</div>
+   </div>
    <div class="card guide sync-card">
     <h2>端末間の同期（PC⇔iPad）</h2>
     <p>教材・強調・手書きを、あなたの<b>非公開GitHubリポジトリ</b>に保存して端末間で共有します（追加サーバー・有料サービスは不要）。一度設定すると、編集は数秒で自動送信され、他端末は起動時・画面を開いたとき・1分ごとに自動で取り込みます。</p>
@@ -131,12 +143,13 @@
      <li>左の「＋ 新規」から授業教材を作ります。入力した内容は自動で保存され、板書・投影にもすぐ反映されます。</li>
      <li>本文は1行＝縦書きの1列です。現代語訳は本文と同じ行数で入力すると、番号で対応します。</li>
      <li>語句・品詞・文法事項は「＋ 助動詞」などのボタンで追加し、品詞・活用の種類・活用形・意味・説明を入力します。</li>
-     <li>「板書プレビュー」「投影モード」では、チェックした項目だけが画面いっぱいに大きく表示されます（「自動で大きく」）。見出しも隠せます。</li>
+     <li>「板書プレビュー」「投影モード」は、本文・現代語訳・語句・文法のすべてが<b>縦書き</b>で、右から左へ並びます。表示する項目だけが画面いっぱいに大きくなります（「自動で大きく」）。「。」ごとに自動で改行して短く表示できます（「「。」で改行」。入力した本文自体は変わりません）。見出しも隠せます。</li>
+     <li>「✨ AIで語句・文法を自動入力」（要APIキー）で、本文から語句・品詞・活用・意味・文法説明の下書きを作れます。必ず内容を確認してください。</li>
      <li>投影モードは←→キーまたは「次へ」で、本文→現代語訳→語句→文法の順に提示できます。</li>
      <li>手書きはApple Pencilで画面に触れると自動で手書きONになります（指では描きません。指でのタップは通常どおり反応します）。</li>
     </ol>
     <h3>投影モードのキー操作</h3>
-    <p>→ / Space：次へ　← ：戻る　A：全表示　1〜4：本文・現代語訳・語句・文法の表示切替　＋ / −：文字サイズ　F：自動拡大のON/OFF　H：見出し　T：ツールバーの表示/非表示　D：手書き　E：消しゴム　Ctrl+Z：元に戻す　Esc：終了</p>
+    <p>→ / Space：次へ　← ：戻る　A：全表示　1〜4：本文・現代語訳・語句・文法の表示切替　＋ / −：文字サイズ　F：自動拡大のON/OFF　H：見出し　K：「。」改行　T：ツールバーの表示/非表示　D：手書き　E：消しゴム　Ctrl+Z：元に戻す　Esc：終了</p>
     <h3>板書の大きさと手書きについて</h3>
     <p>板書は常に「16:9の固定サイズ」で組まれ、画面に合わせて拡大縮小されます。そのため、画面の大きさ・向き・端末が変わっても配置は崩れず、手書きの位置もずれません。手書きは<b>表示内容の組み合わせ</b>（本文のみ／本文＋解説／解説のみ）ごとに保存されます。表示内容が変わると文字の位置が変わるためです。</p>
     <h3>文法候補抽出について</h3>
@@ -157,19 +170,22 @@
    <div class="pb-group">
     <label class="check"><input type="checkbox" class="auto-fit">自動で大きく</label>
     <label class="check"><input type="checkbox" class="hdr-toggle">見出し</label>
+      <label class="check"><input type="checkbox" class="brk-toggle">「。」で改行</label>
     <button class="btn" id="pres-osize-down">本文 小</button><button class="btn" id="pres-osize-up">本文 大</button>
     <button class="btn" id="pres-lsize-down">解説 小</button><button class="btn" id="pres-lsize-up">解説 大</button>
    </div>
    <button id="pres-exit" class="btn">終了 ✕</button>
   </div>
-  <div class="pb-row">
-   <div class="pb-group"><span data-tools="pen"></span></div>
-   <div class="pb-group"><span data-tools="mark"></span></div>
+  <div id="pres-more" hidden>
+   <div class="pb-row">
+    <div class="pb-group"><span data-tools="pen"></span></div>
+    <div class="pb-group"><span data-tools="mark"></span></div>
+   </div>
+   <div class="pb-row"><div id="chips-p" class="chips"></div></div>
   </div>
-  <div class="pb-row"><div id="chips-p" class="chips"></div></div>
  </div>
  <div id="stage-area" class="stage-area"><div id="stage-p" class="stage-wrap"><div id="pres-board" class="board drawing-board"></div></div></div>
- <div id="pres-foot" class="presentation-foot"><span>→/Space 次へ ・ ← 戻る ・ A 全表示 ・ 1〜4 表示切替 ・ T ツール表示 ・ D 手書き ・ Esc 終了</span><span id="pres-count">全表示</span></div>
+ <div id="pres-foot" class="presentation-foot"><span>→/Space 次へ ・ ← 戻る ・ A 全表示 ・ 1〜4 表示切替 ・ T ツール欄 ・ D 手書き ・ Esc 終了</span><span id="pres-count">全表示</span></div>
  <button id="pres-bar-toggle" class="pres-handle" aria-label="ツールバーの表示切替">⚙ ツール</button>
 </div>
 

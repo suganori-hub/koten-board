@@ -1,9 +1,10 @@
-// KOTEN BOARD v3 Service Worker
-// ・キャッシュ名を v3 に更新（旧キャッシュは activate 時に削除）
-// ・ネットワーク優先（オンライン時は常に最新を取得、オフライン時のみキャッシュを使用）
-// ・skipWaiting / clients.claim で更新を即時反映（古い画面が残らない）
-const CACHE = "koten-board-cache-v3";
-const ASSETS = ["./", "./index.html", "./style.css?v=3", "./app.js?v=3", "./manifest.webmanifest"];
+// KOTEN BOARD v4 Service Worker
+// ・キャッシュ名 v4（旧キャッシュは activate 時に削除）
+// ・ネットワーク優先（オンライン時は常に最新、オフライン時のみキャッシュ）
+// ・skipWaiting / clients.claim で更新を即時反映
+// ・外部API（GitHub同期・AI）は一切キャッシュせず素通し
+const CACHE = "koten-board-cache-v4";
+const ASSETS = ["./", "./index.html", "./style.css?v=4", "./app.js?v=4", "./manifest.webmanifest"];
 
 self.addEventListener("install", e => {
   e.waitUntil(
@@ -29,6 +30,6 @@ self.addEventListener("fetch", e => {
         if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
         return res;
       })
-      .catch(() => caches.match(req, { ignoreSearch: false }).then(m => m || caches.match(req, { ignoreSearch: true })).then(m => m || caches.match("./index.html")))
+      .catch(() => caches.match(req).then(m => m || caches.match(req, { ignoreSearch: true })).then(m => m || caches.match("./index.html")))
   );
 });
