@@ -733,19 +733,30 @@ const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/
 const ghUrl = (c, p) => `https://api.github.com/repos/${c.repo}${p}`;
 const ghHead = c => ({ Authorization: "Bearer " + c.token, Accept: "application/vnd.github+json" });
 const ghPath = c => (c.path || "koten-board-data.json").split("/").map(encodeURIComponent).join("/");
-function ghErr(status) {
-  if (status === 401) return "トークンが無効、または期限切れです";
-  if (status === 403) return "権限不足またはAPI制限です（トークンのContents権限を確認）";
-  if (status === 404) return "リポジトリまたはブランチが見つかりません（名前・トークンの対象を確認）";
+function ghErr(status, e) {
+  const kind = e && e.kind;
+  if (status === 401) return "トークンが無効、または期限切れです。GitHubでトークンを作り直して入力してください";
+  if (kind === "branch") return `ブランチ「${e.branch}」がありません。このリポジトリの既定ブランチは「${e.def || "不明"}」です。ブランチ欄を「${e.def || ""}」にするか、空欄にしてください`;
+  if (kind === "repo" || status === 404) return "リポジトリが見つかりません。①「所有者/名前」の綴り（例 suganori-hub/koten-data）②トークン作成時の「Only select repositories」にこのリポジトリを入れたか ③Contents を「Read and write」にしたか を確認してください（非公開リポジトリは、権限が足りないと「見つからない」と表示されます）";
+  if (status === 403) return "権限不足またはAPI制限です（トークンの Contents 権限を「Read and write」にしてください）";
   if (status === 409 || status === 422) return "保存が競合しました（もう一度同期します）";
   return "同期エラー(" + status + ")";
+}
+async function ensureBranch(c) { // リポジトリの存在・権限・ブランチを順に確認し、原因を特定する
+  const rr = await fetch(ghUrl(c, ""), { headers: ghHead(c), cache: "no-store" });
+  if (!rr.ok) throw Object.assign(new Error("gh"), { status: rr.status, kind: rr.status === 404 ? "repo" : undefined });
+  const def = (await rr.json()).default_branch || "main";
+  if (!c.branch) { c.branch = def; wr(SYNC_KEY, c); return def; }
+  const br = await fetch(ghUrl(c, `/branches/${encodeURIComponent(c.branch)}`), { headers: ghHead(c), cache: "no-store" });
+  if (br.status === 404) throw Object.assign(new Error("gh"), { status: 404, kind: "branch", branch: c.branch, def });
+  if (!br.ok) throw Object.assign(new Error("gh"), { status: br.status });
+  return def;
 }
 async function ghGet(c) {
   const br = encodeURIComponent(c.branch || "main");
   const r = await fetch(ghUrl(c, `/contents/${ghPath(c)}?ref=${br}&_=${Date.now()}`), { headers: ghHead(c), cache: "no-store" });
   if (r.status === 404) { // ファイル未作成か、リポジトリ自体にアクセスできないか
-    const rr = await fetch(ghUrl(c, ""), { headers: ghHead(c), cache: "no-store" });
-    if (!rr.ok) throw Object.assign(new Error("gh"), { status: rr.status });
+    await ensureBranch(c); // リポジトリ・ブランチに問題があればここで具体的なエラーになる
     return { data: null, sha: undefined };
   }
   if (!r.ok) throw Object.assign(new Error("gh"), { status: r.status });
@@ -755,7 +766,8 @@ async function ghGet(c) {
   return { data: JSON.parse(b64dec(b64)), sha: meta.sha };
 }
 async function ghPut(c, payload, sha) {
-  const body = { message: "KOTEN BOARD sync " + new Date().toISOString(), content: b64enc(JSON.stringify(payload)), branch: c.branch || "main" };
+  const body = { message: "KOTEN BOARD sync " + new Date().toISOString(), content: b64enc(JSON.stringify(payload)) };
+  if (c.branch) body.branch = c.branch;
   if (sha) body.sha = sha;
   const r = await fetch(ghUrl(c, `/contents/${ghPath(c)}`), { method: "PUT", headers: { ...ghHead(c), "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) throw Object.assign(new Error("gh"), { status: r.status });
@@ -828,13 +840,13 @@ async function syncNow(manual) {
     setSync("同期済み ✓ " + hhmm());
     if (manual) toast(changed ? "他の端末の変更を取り込みました" : "同期しました");
   } catch (e) {
-    const m = e.status ? ghErr(e.status) : "通信できません（オフライン）。接続後に自動で再同期します";
+    const m = e.status ? ghErr(e.status, e) : "通信できません（オフライン）。接続後に自動で再同期します";
     setSync(m, true); if (manual) toast(m);
   } finally { syncing = false; if (pendingSync) { pendingSync = false; scheduleSync(); } }
 }
 function fillSyncForm() {
   const c = rd(SYNC_KEY, null) || {};
-  $("sync-repo").value = c.repo || ""; $("sync-branch").value = c.branch || ""; $("sync-path").value = c.path || ""; $("sync-auto").checked = c.auto !== false;
+  $("sync-repo").value = c.repo || ""; $("sync-branch").value = c.branch || ""; $("sync-branch").placeholder = "空欄＝自動（既定ブランチ）"; $("sync-path").value = c.path || ""; $("sync-auto").checked = c.auto !== false;
   $("sync-role").value = c.role === "view" ? "view" : "edit"; $("sync-token").value = ""; $("sync-token").placeholder = c.token ? "登録済み（変更する場合のみ入力）" : "github_pat_…（この端末にだけ保存）";
   if (!c.token) setSync("未設定");
 }
@@ -843,7 +855,7 @@ function saveSyncForm() {
   const token = $("sync-token").value.trim() || old.token || "";
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { toast("リポジトリは「所有者/名前」の形式で入力してください"); return false; }
   if (!token) { toast("アクセストークンを入力してください"); return false; }
-  wr(SYNC_KEY, { repo, token, branch: $("sync-branch").value.trim() || "main", path: $("sync-path").value.trim() || "koten-board-data.json", auto: $("sync-auto").checked, role: $("sync-role").value });
+  wr(SYNC_KEY, { repo, token, branch: $("sync-branch").value.trim(), path: $("sync-path").value.trim() || "koten-board-data.json", auto: $("sync-auto").checked, role: $("sync-role").value });
   return true;
 }
 $("sync-connect").onclick = () => {
