@@ -6,7 +6,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const KEY = "koten-board-v1", SCHEMA_KEY = "koten-board-schema", SCHEMA = 4;
-const TOMB_KEY = "koten-board-tombstones", SYNC_KEY = "koten-board-sync", AI_KEY = "koten-board-ai";
+const TOMB_KEY = "koten-board-tombstones", SYNC_KEY = "koten-board-sync", AI_KEY = "koten-board-ai", VDRAW_KEY = "koten-board-viewer-drawings";
 const STAGE_W = 1600, STAGE_H = 900;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const str = v => v == null ? "" : String(v);
@@ -77,7 +77,7 @@ function load() {
 }
 
 /* ================= 状態 ================= */
-let lessons = load(), tombs = rd(TOMB_KEY, {}), current = null;
+let lessons = load(), tombs = rd(TOMB_KEY, {}), vdraw = rd(VDRAW_KEY, {}), current = null;
 let staged = false, revealStep = 4;
 let presStep = 0, presShow = [false, false, false, false];
 let hiddenTypes = new Set(), focusTerm = "", activeLine = -1, lastSel = null;
@@ -89,13 +89,13 @@ const stageScale = { b: 1, p: 1 }; let lastFit = { o: 60, t: 36 };
 function setStatus(t) { $("save-status").textContent = t; }
 function persist() {
   clearTimeout(saveTimer);
-  const ok = wr(KEY, lessons) && wr(TOMB_KEY, tombs);
+  const ok = wr(KEY, lessons) && wr(TOMB_KEY, tombs) && wr(VDRAW_KEY, vdraw);
   try { localStorage.setItem(SCHEMA_KEY, String(SCHEMA)); } catch (e) {}
   if (ok) setStatus("保存済み ✓ " + hhmm()); else { setStatus("保存できません"); toast("保存できません。容量を確認し、書き出しでバックアップしてください"); }
   return ok;
 }
 function scheduleSave() { setStatus("保存中…"); clearTimeout(saveTimer); saveTimer = setTimeout(persist, 500); }
-function markDirty() { if (!current) return; current.updatedAt = Date.now(); lastEditAt = Date.now(); scheduleSave(); scheduleSync(); }
+function markDirty() { if (!current) return; if (isViewer()) { scheduleSave(); return; } current.updatedAt = Date.now(); lastEditAt = Date.now(); scheduleSave(); scheduleSync(); }
 function toast(s) { const t = $("toast"); t.textContent = s; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2600); }
 
 /* ================= 盤面の骨組み（全パネル縦書き） ================= */
@@ -294,7 +294,7 @@ function fill() {
   renderItemsEditor(); syncViewUI();
 }
 function readForm() {
-  if (!current) return;
+  if (!current || isViewer()) return;
   const oldOrig = current.original;
   current.title = $("lesson-title").value; current.source = $("lesson-source").value; current.className = $("lesson-class").value; current.session = $("lesson-session").value;
   current.goal = $("lesson-goal").value; current.original = $("lesson-original").value; current.translation = $("lesson-translation").value; current.notes = $("lesson-notes").value;
@@ -314,11 +314,11 @@ const blank = () => normLesson({ id: uid(), title: "新しい授業", updatedAt:
 
 /* ================= 教材の操作 ================= */
 $("lesson-list").addEventListener("click", e => { const b = e.target.closest("[data-id]"); if (b) { readForm(); persist(); selectLesson(b.dataset.id); } });
-$("new-lesson").onclick = () => { readForm(); const x = blank(); lessons.unshift(x); persist(); selectLesson(x.id); document.querySelector('[data-tab="edit"]').click(); scheduleSync(); toast("新しい授業を作成しました"); };
+$("new-lesson").onclick = () => { if (viewerBlock()) return; readForm(); const x = blank(); lessons.unshift(x); persist(); selectLesson(x.id); document.querySelector('[data-tab="edit"]').click(); scheduleSync(); toast("新しい授業を作成しました"); };
 $("save-lesson").onclick = () => { readForm(); if (persist()) { renderList(); renderAll(); scheduleSync(); toast("教材を保存しました"); } };
-$("duplicate").onclick = () => { if (!current) return; readForm(); const x = normLesson(structuredClone(current)); x.id = uid(); x.title = (x.title || "授業") + "（複製）"; x.updatedAt = Date.now(); lessons.unshift(x); persist(); selectLesson(x.id); scheduleSync(); toast("教材を複製しました"); };
+$("duplicate").onclick = () => { if (viewerBlock() || !current) return; readForm(); const x = normLesson(structuredClone(current)); x.id = uid(); x.title = (x.title || "授業") + "（複製）"; x.updatedAt = Date.now(); lessons.unshift(x); persist(); selectLesson(x.id); scheduleSync(); toast("教材を複製しました"); };
 $("delete").onclick = () => {
-  if (!current || !confirm(`「${current.title || "名称未設定"}」を削除しますか？（同期している他の端末からも削除されます。必要なら先に書き出してください）`)) return;
+  if (viewerBlock() || !current || !confirm(`「${current.title || "名称未設定"}」を削除しますか？（同期している他の端末からも削除されます。必要なら先に書き出してください）`)) return;
   tombs[current.id] = Date.now();
   lessons = lessons.filter(x => x.id !== current.id);
   if (!lessons.length) lessons.push(blank());
@@ -386,6 +386,7 @@ function aiMsg(status) {
   return "AIへの問い合わせに失敗しました(" + status + ")";
 }
 async function aiFill() {
+  if (viewerBlock()) return;
   const cfg = rd(AI_KEY, null);
   if (!cfg || !cfg.key) { toast("先に「使い方・同期設定」でAPIキーを登録してください"); document.querySelector('[data-tab="guide"]').click(); return; }
   readForm();
@@ -431,7 +432,7 @@ $("ai-remove").onclick = () => { if (!confirm("この端末のAPIキーを削除
 function download(name, data, type) { const a = document.createElement("a"), u = URL.createObjectURL(new Blob([data], { type })); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); }
 $("export-all").onclick = () => { readForm(); persist(); const d = new Date(), ymd = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); download(`koten-board-backup-${ymd}.json`, JSON.stringify(lessons, null, 2), "application/json"); toast("書き出しました"); };
 $("import-all").onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
+  const f = e.target.files[0]; if (!f) return; if (viewerBlock()) { e.target.value = ""; return; }
   try {
     let x = JSON.parse(await f.text());
     if (x && !Array.isArray(x) && Array.isArray(x.lessons)) x = x.lessons;
@@ -514,7 +515,7 @@ function cutMarks(s, e) {
   current.marks = out;
 }
 function applyMark(kind) {
-  if (!current) return;
+  if (!current || viewerBlock()) return;
   if (kind === "x") { if (current.marks.length && confirm("この教材の強調をすべて解除しますか？")) { current.marks = []; renderOriginalOnly(); markDirty(); } return; }
   const r = selectionRange() || lastSel;
   if (!r) { toast("本文の文字をなぞって選択してから押してください"); return; }
@@ -592,7 +593,9 @@ function layoutKey(p) {
   return `m${v.oPx}_${v.lPx}_${v.lh}_${v.ls}${flags}`; // 手動サイズでは表示内容を変えても本文の位置は動かない
 }
 const strokeKey = s => s.k || LEGACY_KEY;
-const strokesFor = p => (current ? current.drawings.filter(s => strokeKey(s) === layoutKey(p)) : []);
+const myDraw = () => { if (!current) return []; if (!isViewer()) return current.drawings; return vdraw[current.id] || (vdraw[current.id] = []); }; // 閲覧端末の手書きはこの端末だけに保存
+const allDraw = () => (!current ? [] : isViewer() ? current.drawings.concat(vdraw[current.id] || []) : current.drawings); // 閲覧端末では編集端末の手書きも見える
+const strokesFor = p => allDraw().filter(s => strokeKey(s) === layoutKey(p));
 const strokeWidth = (s, pt) => (s.width || 3) * (s.erase ? 6 : 0.35 + 0.9 * (pt.p || 0.5));
 function drawStroke(ctx, s) {
   const pts = s.points; if (!pts.length) return;
@@ -638,15 +641,15 @@ function syncTools() {
 function setDraw(on, silent) { drawingEnabled = on; syncTools(); if (!silent) toast(on ? "手書きON：Apple Pencilで書けます" : "手書きOFF：指でスクロール・タップできます"); }
 function toggleEraser() { eraserMode = !eraserMode; if (eraserMode && !drawingEnabled) drawingEnabled = true; syncTools(); toast(eraserMode ? "消しゴム" : "ペンに戻しました"); }
 function undo() {
-  if (!current) return; const p = activeSurface(), key = layoutKey(p), list = current.drawings;
+  if (!current) return; const p = activeSurface(), key = layoutKey(p), list = myDraw();
   for (let i = list.length - 1; i >= 0; i--) if (strokeKey(list[i]) === key) { list.splice(i, 1); drawFull(p); markDirty(); return; }
   toast("元に戻す書き込みがありません");
 }
 function clearDrawings() {
   if (!current) return; const p = activeSurface(), key = layoutKey(p);
-  if (!strokesFor(p).length) { toast("この表示の書き込みはありません"); return; }
+  if (!myDraw().some(s => strokeKey(s) === key)) { toast(isViewer() ? "この端末で書いた書き込みはありません" : "この表示の書き込みはありません"); return; }
   if (!confirm("この表示の手書きをすべて消去しますか？（元に戻せません）")) return;
-  current.drawings = current.drawings.filter(s => strokeKey(s) !== key); drawFull(p); markDirty(); toast("手書きを消去しました");
+  { const keep = myDraw().filter(s => strokeKey(s) !== key); if (isViewer()) vdraw[current.id] = keep; else current.drawings = keep; } drawFull(p); markDirty(); toast("手書きを消去しました");
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (b) {
@@ -673,7 +676,7 @@ const beginStroke = {};
     e.preventDefault(); pid = e.pointerId; try { c.setPointerCapture(pid); } catch (_) {}
     strokeActive = true; lastEditAt = Date.now();
     cur = { color: penColor, width: +(penWidth * 1.6).toFixed(2), erase: eraserMode, k: layoutKey(p), points: [pt(e)] };
-    current.drawings.push(cur);
+    myDraw().push(cur);
     const { ctx } = canvasCtx(p); drawStroke(ctx, cur);
   };
   beginStroke[p] = begin;
@@ -714,10 +717,17 @@ const beginStroke = {};
 });
 
 /* ================= 端末間同期（GitHub非公開リポジトリ） ================= */
+const isViewer = () => { const c = rd(SYNC_KEY, null); return !!(c && c.repo && c.token && c.role === "view"); };
+function viewerBlock() { if (isViewer()) { toast("この端末は閲覧専用です。編集は編集端末で行ってください"); return true; } return false; }
+function applyRole() {
+  const v = isViewer(); document.body.classList.toggle("viewer", v);
+  document.querySelector(".brand small").textContent = "高校古典・授業支援システム v4" + (v ? "（閲覧専用）" : "");
+  if (v && $("tab-edit").classList.contains("active")) document.querySelector('[data-tab="board"]').click();
+}
 const syncCfg = () => { const c = rd(SYNC_KEY, null); return c && c.repo && c.token ? c : null; };
 let syncing = false, pendingSync = false, syncTimer = 0;
 function setSync(t, err) { $("sync-status").textContent = "同期：" + t; $("sync-detail").textContent = t; $("sync-status").classList.toggle("err", !!err); $("sync-detail").classList.toggle("err", !!err); }
-function scheduleSync() { const c = syncCfg(); if (!c || c.auto === false) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(false), 4000); }
+function scheduleSync() { const c = syncCfg(); if (!c || c.auto === false || c.role === "view") return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(false), 4000); }
 const b64enc = s => { const b = new TextEncoder().encode(s); let bin = ""; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin); };
 const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, "")), ch => ch.charCodeAt(0)));
 const ghUrl = (c, p) => `https://api.github.com/repos/${c.repo}${p}`;
@@ -771,6 +781,12 @@ function mergeData(localLessons, localDel, remote, protectId) {
   const needsPush = !remote || out.some(l => !rm.has(l.id) || rm.get(l.id) !== (l.updatedAt || 0)) || Object.keys(del).some(k => rdel[k] !== del[k]) || rl.some(l => !out.includes(best.get(l.id)) && !del[l.id]);
   return { lessons: out, deleted: del, needsPush };
 }
+function mergeViewer(ll, remote) { // 閲覧端末：編集端末の内容をそのまま表示（この端末側の表示設定は、同じ版の間だけ保持）
+  const rl = (remote && Array.isArray(remote.lessons) ? remote.lessons : []).filter(x => x && typeof x === "object").map(normLesson);
+  const del = (remote && remote.deleted) || {}, lm = new Map(ll.map(l => [l.id, l]));
+  const out = rl.filter(l => !(del[l.id] && del[l.id] >= (l.updatedAt || 0))).map(r => { const l = lm.get(r.id); return l && (l.updatedAt || 0) === (r.updatedAt || 0) ? l : r; });
+  return { lessons: out, deleted: del, needsPush: false };
+}
 function applyMerged(m) {
   const sig = a => a.map(l => l.id + ":" + (l.updatedAt || 0)).join("|");
   const before = sig(lessons) + JSON.stringify(tombs), prev = current, curId = current && current.id;
@@ -780,7 +796,7 @@ function applyMerged(m) {
   if (!lessons.some(l => l.id === curId)) selectLesson(lessons[0].id);
   else {
     current = lessons.find(l => l.id === curId);
-    if (current !== prev && !(Date.now() - lastEditAt < 8000)) fill();
+    if (current !== prev && (isViewer() || !(Date.now() - lastEditAt < 8000))) fill();
     renderList(); renderAll();
   }
   return true;
@@ -792,6 +808,14 @@ async function syncNow(manual) {
   syncing = true; setSync("同期中…");
   try {
     let changed = false;
+    if (isViewer()) {
+      const remote = await ghGet(c);
+      if (!remote.data || !Array.isArray(remote.data.lessons)) { setSync("編集端末のデータがまだありません", true); if (manual) toast("編集端末から先に同期してください"); return; }
+      changed = applyMerged(mergeViewer(lessons, remote.data));
+      setSync("閲覧専用・最新 ✓ " + hhmm());
+      if (manual) toast(changed ? "編集端末の最新の内容を表示しました" : "すでに最新です");
+      return;
+    }
     for (let attempt = 0; attempt < 3; attempt++) {
       const remote = await ghGet(c);
       const editing = Date.now() - lastEditAt < 8000 || strokeActive;
@@ -811,7 +835,7 @@ async function syncNow(manual) {
 function fillSyncForm() {
   const c = rd(SYNC_KEY, null) || {};
   $("sync-repo").value = c.repo || ""; $("sync-branch").value = c.branch || ""; $("sync-path").value = c.path || ""; $("sync-auto").checked = c.auto !== false;
-  $("sync-token").value = ""; $("sync-token").placeholder = c.token ? "登録済み（変更する場合のみ入力）" : "github_pat_…（この端末にだけ保存）";
+  $("sync-role").value = c.role === "view" ? "view" : "edit"; $("sync-token").value = ""; $("sync-token").placeholder = c.token ? "登録済み（変更する場合のみ入力）" : "github_pat_…（この端末にだけ保存）";
   if (!c.token) setSync("未設定");
 }
 function saveSyncForm() {
@@ -819,27 +843,31 @@ function saveSyncForm() {
   const token = $("sync-token").value.trim() || old.token || "";
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { toast("リポジトリは「所有者/名前」の形式で入力してください"); return false; }
   if (!token) { toast("アクセストークンを入力してください"); return false; }
-  wr(SYNC_KEY, { repo, token, branch: $("sync-branch").value.trim() || "main", path: $("sync-path").value.trim() || "koten-board-data.json", auto: $("sync-auto").checked });
+  wr(SYNC_KEY, { repo, token, branch: $("sync-branch").value.trim() || "main", path: $("sync-path").value.trim() || "koten-board-data.json", auto: $("sync-auto").checked, role: $("sync-role").value });
   return true;
 }
-$("sync-connect").onclick = () => { if (!saveSyncForm()) return; readForm(); persist(); try { localStorage.setItem(KEY + "-before-sync", JSON.stringify(lessons)); } catch (e) {} fillSyncForm(); syncNow(true); };
+$("sync-connect").onclick = () => {
+  if ($("sync-role").value === "view" && !isViewer() && !confirm("この端末を「閲覧専用」にします。この端末の教材は、編集端末の内容で置き換わります（置き換え前の内容はこの端末に退避されます）。よろしいですか？")) return;
+  if (!saveSyncForm()) return; readForm(); persist(); try { localStorage.setItem(KEY + "-before-sync", JSON.stringify(lessons)); } catch (e) {} fillSyncForm(); applyRole(); syncNow(true); };
 $("sync-now").onclick = () => syncNow(true);
 $("sync-btn").onclick = () => syncNow(true);
 $("sync-auto").onchange = () => { const c = rd(SYNC_KEY, null); if (c) { c.auto = $("sync-auto").checked; wr(SYNC_KEY, c); } };
-$("sync-disconnect").onclick = () => { if (!confirm("この端末の同期設定を解除しますか？（教材データは残ります）")) return; try { localStorage.removeItem(SYNC_KEY); } catch (e) {} fillSyncForm(); setSync("未設定"); toast("同期を解除しました"); };
+$("sync-disconnect").onclick = () => { if (!confirm("この端末の同期設定を解除しますか？（教材データは残ります）")) return; try { localStorage.removeItem(SYNC_KEY); } catch (e) {} fillSyncForm(); applyRole(); setSync("未設定"); toast("同期を解除しました"); };
 $("sync-code-make").onclick = async () => {
   const c = syncCfg(); if (!c) { toast("先に接続してください"); return; }
+  if (c.role === "view") { toast("接続コードは編集端末で作ります"); return; }
   const code = "KB1:" + btoa(unescape(encodeURIComponent(JSON.stringify({ repo: c.repo, branch: c.branch, path: c.path, token: c.token }))));
   $("sync-code").value = code;
-  try { await navigator.clipboard.writeText(code); toast("接続コードをコピーしました（他人に見せないでください）"); } catch (e) { toast("下の欄に表示しました。コピーして使ってください"); }
+  try { await navigator.clipboard.writeText(code); toast("閲覧端末用の接続コードをコピーしました（他人に見せないでください）"); } catch (e) { toast("下の欄に表示しました。コピーして使ってください"); }
 };
 $("sync-code-apply").onclick = () => {
   try {
     const raw = $("sync-code").value.trim(); if (!raw.startsWith("KB1:")) throw Error("code");
+    if (!isViewer() && !confirm("この端末を「閲覧専用」にします。この端末の教材は、編集端末の内容で置き換わります（置き換え前の内容はこの端末に退避されます）。よろしいですか？")) return;
     const o = JSON.parse(decodeURIComponent(escape(atob(raw.slice(4))))); if (!o.repo || !o.token) throw Error("code");
-    wr(SYNC_KEY, { repo: o.repo, token: o.token, branch: o.branch || "main", path: o.path || "koten-board-data.json", auto: true });
+    wr(SYNC_KEY, { repo: o.repo, token: o.token, branch: o.branch || "main", path: o.path || "koten-board-data.json", auto: true, role: "view" });
     $("sync-code").value = ""; readForm(); persist(); try { localStorage.setItem(KEY + "-before-sync", JSON.stringify(lessons)); } catch (e) {}
-    fillSyncForm(); syncNow(true);
+    fillSyncForm(); applyRole(); document.querySelector('[data-tab="board"]').click(); syncNow(true);
   } catch (e) { toast("接続コードを読み取れませんでした"); }
 };
 
@@ -854,7 +882,7 @@ window.addEventListener("beforeunload", flush);
 window.addEventListener("pagehide", flush);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); else setTimeout(() => syncNow(false), 300); });
 window.addEventListener("online", () => syncNow(false));
-setInterval(() => { if (document.visibilityState === "visible" && syncCfg() && (syncCfg().auto !== false)) syncNow(false); }, 60000);
+setInterval(() => { if (document.visibilityState === "visible" && syncCfg() && (syncCfg().auto !== false)) syncNow(false); }, 30000);
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   const had = !!navigator.serviceWorker.controller; let reloaded = false;
@@ -862,7 +890,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (had && !reloaded && $("presentation").hidden) { reloaded = true; flush(); location.reload(); } });
 }
 
-fillSyncForm(); fillAiForm();
+fillSyncForm(); fillAiForm(); applyRole();
 selectLesson(lessons[0].id);
 persist();
 if (syncCfg()) setTimeout(() => syncNow(false), 600); else setSync("未設定");

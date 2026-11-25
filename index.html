@@ -115,27 +115,29 @@
    </div>
    <div class="card guide sync-card">
     <h2>端末間の同期（PC⇔iPad）</h2>
-    <p>教材・強調・手書きを、あなたの<b>非公開GitHubリポジトリ</b>に保存して端末間で共有します（追加サーバー・有料サービスは不要）。一度設定すると、編集は数秒で自動送信され、他端末は起動時・画面を開いたとき・1分ごとに自動で取り込みます。</p>
+    <p><b>教材を編集する端末は1台</b>（編集端末）だけにします。他の端末（閲覧端末）は、編集端末で作った教材・強調・手書きを<b>表示するだけ</b>で、編集・追加・削除はできません。データは、あなたの<b>非公開GitHubリポジトリ</b>を経由します（追加サーバー・有料サービスは不要）。編集端末の変更は数秒で送信され、閲覧端末は起動時・画面を開いたとき・30秒ごとに自動で最新になります。</p>
     <ol>
      <li>GitHubで<b>Private（非公開）</b>リポジトリを作成します（例：<code>koten-data</code>）。「Add a README file」にチェックを入れてください。</li>
      <li>GitHub → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → 「Generate new token」。<br>Repository access は「Only select repositories」で上のリポジトリだけを選び、Permissions → <b>Contents: Read and write</b> にして生成します。</li>
-     <li>下の欄にリポジトリ名とトークンを入れて「接続して同期」を押します。</li>
-     <li>2台目以降は、この端末で「接続コードを作る」→ 別の端末の「接続コードを貼り付け」欄へ貼り付けると設定が一瞬で終わります。</li>
+     <li><b>編集端末</b>で、役割を「編集端末」にして、リポジトリ名とトークンを入れ「接続して同期」を押します。</li>
+     <li>編集端末で「閲覧端末用の接続コードを作る」→ 閲覧にしたい端末の「接続コードを貼り付け」欄に貼って「コードを読み込んで接続」。自動で「閲覧専用」になります。</li>
     </ol>
+    <p class="hint">閲覧端末でも、授業中のApple Pencilによる手書き・文字サイズ変更・投影は使えます。閲覧端末で書いた手書きはその端末だけに残り、編集端末へは送られません（編集端末の手書きは閲覧端末にも表示されます）。</p>
     <div class="sync-grid">
      <label>リポジトリ（所有者/名前）<input id="sync-repo" placeholder="例：suganori-hub/koten-data" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
      <label>ブランチ<input id="sync-branch" placeholder="main" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
      <label>保存ファイル<input id="sync-path" placeholder="koten-board-data.json" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+     <label>この端末の役割<select id="sync-role"><option value="edit">編集端末（教材を作る・編集する。1台だけ）</option><option value="view">閲覧端末（表示専用）</option></select></label>
      <label>アクセストークン<input id="sync-token" type="password" placeholder="github_pat_…（この端末にだけ保存）" autocomplete="off"></label>
     </div>
     <div class="button-row"><button id="sync-connect" class="btn primary">接続して同期</button><button id="sync-now" class="btn">今すぐ同期</button><label class="check"><input id="sync-auto" type="checkbox" checked>自動で同期する</label><button id="sync-disconnect" class="btn danger">接続を解除</button></div>
     <p id="sync-detail" class="hint">未設定</p>
     <div class="sync-grid">
-     <div><button id="sync-code-make" class="btn">接続コードを作る（コピー）</button></div>
+     <div><button id="sync-code-make" class="btn">閲覧端末用の接続コードを作る（コピー）</button></div>
      <label>接続コードを貼り付け<textarea id="sync-code" rows="2" placeholder="KB1:…"></textarea></label>
      <div><button id="sync-code-apply" class="btn">コードを読み込んで接続</button></div>
     </div>
-    <div class="callout">接続コードとトークンは<b>パスワードと同じ</b>です。他人に見せないでください。リポジトリは必ず<b>非公開</b>にしてください（教材の著作権・教師用メモが含まれます）。同じ教材を2台で同時に編集した場合は、新しく保存した方が採用されます。</div>
+    <div class="callout">接続コードとトークンは<b>パスワードと同じ</b>です。他人に見せないでください。リポジトリは必ず<b>非公開</b>にしてください（教材の著作権・教師用メモが含まれます）。編集端末を2台にすると、新しく保存した方が採用されます（1台に絞ることをおすすめします）。</div>
    </div>
    <div class="card guide">
     <h2>使い方</h2>

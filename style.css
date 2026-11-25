@@ -197,3 +197,7 @@ code{background:#eef2ef;padding:1px 5px;border-radius:4px}
  .ch.m1,.ch.m2,.ch.hit{color:#111}
  .draw-canvas{display:none!important}
 }
+
+/* ---- 閲覧専用端末：編集系の操作を隠す ---- */
+body.viewer [data-tab="edit"],body.viewer #tab-edit,body.viewer #new-lesson,body.viewer #duplicate,body.viewer #delete,body.viewer .side-foot .file-label,body.viewer [data-tools="mark"],body.viewer .mark-hint{display:none!important}
+.sync-grid select{display:block;width:100%;margin-top:6px;padding:10px 11px;border:1px solid #d5ded8;border-radius:7px;background:#fbfcfb;font-size:14px}
