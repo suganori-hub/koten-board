@@ -1,0 +1,10 @@
+{
+  "name": "KOTEN BOARD 古典授業支援",
+  "short_name": "KOTEN BOARD",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f7f5",
+  "theme_color": "#18352c",
+  "lang": "ja",
+  "icons": []
+}
