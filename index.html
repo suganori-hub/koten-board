@@ -130,7 +130,7 @@
      <label>この端末の役割<select id="sync-role"><option value="edit">編集端末（教材を作る・編集する。1台だけ）</option><option value="view">閲覧端末（表示専用）</option></select></label>
      <label>アクセストークン<input id="sync-token" type="password" placeholder="github_pat_…（この端末にだけ保存）" autocomplete="off"></label>
     </div>
-    <div class="button-row"><button id="sync-connect" class="btn primary">接続して同期</button><button id="sync-now" class="btn">今すぐ同期</button><label class="check"><input id="sync-auto" type="checkbox" checked>自動で同期する</label><button id="sync-disconnect" class="btn danger">接続を解除</button></div>
+    <div class="button-row"><button id="sync-connect" class="btn primary">接続して同期</button><button id="sync-now" class="btn">今すぐ同期</button><button id="sync-force" class="btn">この端末の内容を送り直す（編集端末）</button><label class="check"><input id="sync-auto" type="checkbox" checked>自動で同期する</label><button id="sync-disconnect" class="btn danger">接続を解除</button></div>
     <p id="sync-detail" class="hint">未設定</p>
     <div class="sync-grid">
      <div><button id="sync-code-make" class="btn">閲覧端末用の接続コードを作る（コピー）</button></div>

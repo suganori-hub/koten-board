@@ -753,6 +753,7 @@ async function ensureBranch(c) { // リポジトリの存在・権限・ブラ�
   return def;
 }
 async function ghGet(c) {
+  if (!c.branch) await ensureBranch(c); // 空欄なら既定ブランチを先に確定
   const br = encodeURIComponent(c.branch || "main");
   const r = await fetch(ghUrl(c, `/contents/${ghPath(c)}?ref=${br}&_=${Date.now()}`), { headers: ghHead(c), cache: "no-store" });
   if (r.status === 404) { // ファイル未作成か、リポジトリ自体にアクセスできないか
@@ -813,7 +814,7 @@ function applyMerged(m) {
   }
   return true;
 }
-async function syncNow(manual) {
+async function syncNow(manual, force) {
   const c = syncCfg();
   if (!c) { if (manual) { toast("同期はまだ設定されていません。「使い方・同期設定」で設定してください"); document.querySelector('[data-tab="guide"]').click(); } return; }
   if (syncing) { pendingSync = true; return; }
@@ -824,7 +825,8 @@ async function syncNow(manual) {
       const remote = await ghGet(c);
       if (!remote.data || !Array.isArray(remote.data.lessons)) { setSync("編集端末のデータがまだありません", true); if (manual) toast("編集端末から先に同期してください"); return; }
       changed = applyMerged(mergeViewer(lessons, remote.data));
-      setSync("閲覧専用・最新 ✓ " + hhmm());
+      const sv = remote.data.savedAt ? new Date(remote.data.savedAt) : null, svt = sv ? String(sv.getHours()).padStart(2, "0") + ":" + String(sv.getMinutes()).padStart(2, "0") : "不明";
+      setSync(`閲覧専用・最新 ✓ ${hhmm()}（編集端末の教材${remote.data.lessons.length}件・編集端末の最終送信 ${svt}）`);
       if (manual) toast(changed ? "編集端末の最新の内容を表示しました" : "すでに最新です");
       return;
     }
@@ -833,11 +835,11 @@ async function syncNow(manual) {
       const editing = Date.now() - lastEditAt < 8000 || strokeActive;
       const m = mergeData(lessons, tombs, remote.data, editing && current ? current.id : null);
       if (applyMerged(m)) changed = true;
-      if (!m.needsPush) break;
+      if (!m.needsPush && !force) break;
       try { await ghPut(c, { app: "koten-board", schema: SCHEMA, savedAt: Date.now(), lessons: lessons.filter(l => !(tombs[l.id] >= (l.updatedAt || 0))), deleted: tombs }, remote.sha); break; }
       catch (e) { if ((e.status === 409 || e.status === 422) && attempt < 2) continue; throw e; }
     }
-    setSync("同期済み ✓ " + hhmm());
+    setSync(`同期済み ✓ ${hhmm()}（この端末の教材${lessons.length}件を保存）`);
     if (manual) toast(changed ? "他の端末の変更を取り込みました" : "同期しました");
   } catch (e) {
     const m = e.status ? ghErr(e.status, e) : "通信できません（オフライン）。接続後に自動で再同期します";
@@ -862,6 +864,7 @@ $("sync-connect").onclick = () => {
   if ($("sync-role").value === "view" && !isViewer() && !confirm("この端末を「閲覧専用」にします。この端末の教材は、編集端末の内容で置き換わります（置き換え前の内容はこの端末に退避されます）。よろしいですか？")) return;
   if (!saveSyncForm()) return; readForm(); persist(); try { localStorage.setItem(KEY + "-before-sync", JSON.stringify(lessons)); } catch (e) {} fillSyncForm(); applyRole(); syncNow(true); };
 $("sync-now").onclick = () => syncNow(true);
+$("sync-force").onclick = () => { if (isViewer()) { toast("閲覧専用の端末からは送信できません"); return; } readForm(); persist(); syncNow(true, true); };
 $("sync-btn").onclick = () => syncNow(true);
 $("sync-auto").onchange = () => { const c = rd(SYNC_KEY, null); if (c) { c.auto = $("sync-auto").checked; wr(SYNC_KEY, c); } };
 $("sync-disconnect").onclick = () => { if (!confirm("この端末の同期設定を解除しますか？（教材データは残ります）")) return; try { localStorage.removeItem(SYNC_KEY); } catch (e) {} fillSyncForm(); applyRole(); setSync("未設定"); toast("同期を解除しました"); };
@@ -877,7 +880,7 @@ $("sync-code-apply").onclick = () => {
     const raw = $("sync-code").value.trim(); if (!raw.startsWith("KB1:")) throw Error("code");
     if (!isViewer() && !confirm("この端末を「閲覧専用」にします。この端末の教材は、編集端末の内容で置き換わります（置き換え前の内容はこの端末に退避されます）。よろしいですか？")) return;
     const o = JSON.parse(decodeURIComponent(escape(atob(raw.slice(4))))); if (!o.repo || !o.token) throw Error("code");
-    wr(SYNC_KEY, { repo: o.repo, token: o.token, branch: o.branch || "main", path: o.path || "koten-board-data.json", auto: true, role: "view" });
+    wr(SYNC_KEY, { repo: o.repo, token: o.token, branch: o.branch || "", path: o.path || "koten-board-data.json", auto: true, role: "view" });
     $("sync-code").value = ""; readForm(); persist(); try { localStorage.setItem(KEY + "-before-sync", JSON.stringify(lessons)); } catch (e) {}
     fillSyncForm(); applyRole(); document.querySelector('[data-tab="board"]').click(); syncNow(true);
   } catch (e) { toast("接続コードを読み取れませんでした"); }
