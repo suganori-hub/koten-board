@@ -272,15 +272,17 @@ function updateCount(p) {
   const st = S[p], el = $(p === "b" ? "b-count" : "pres-count"); if (!el) return;
   const pg = st.pages.length > 1 ? ` ・ 画面 ${st.page + 1}/${st.pages.length}` : "";
   el.textContent = st.G ? `解説 ${Math.min(st.step, st.G)} / ${st.G}${pg}` : "";
+  if (p === "b" && $("bn-count")) $("bn-count").textContent = el.textContent;
 }
 function stepBy(p, d) {
   const st = S[p]; if (!current) return;
-  if (st.step == null) st.step = st.pages[0] ? st.pages[0][1] : 0;
+  if (st.fresh && d > 0 && st.pages[0] && st.pages[0][1] >= st.G) st.step = 0; // 全表示のまま「次へ」→最初の一文から解説を始める
+  st.fresh = false;
   const before = st.step; st.step = clamp(st.step + d, 0, st.G);
   if (st.step === before && d > 0) toast("最後の文です");
   applyStep(p);
 }
-function revealPage(p) { const st = S[p]; if (!current) return; const [, b] = st.pages[Math.max(0, st.page)] || [0, 0]; st.step = b; applyStep(p); }
+function revealPage(p) { const st = S[p]; if (!current) return; st.fresh = false; const [, b] = st.pages[Math.max(0, st.page)] || [0, 0]; st.step = b; applyStep(p); }
 function renderSurface(p) {
   if (!current) return;
   const st = S[p], wrap = $(p + "-groups"), groups = buildGroups(); st.G = groups.length;
@@ -292,7 +294,7 @@ function renderSurface(p) {
   applyView(p);
   if (!layoutStage(p)) return;
   st.pages = computePages(p, st.G);
-  if (st.step == null) st.step = st.pages.length ? st.pages[0][1] : 0; // 板書プレビューは最初の画面の解説をすべて表示
+  if (st.step == null) { st.step = st.pages.length ? st.pages[0][1] : 0; st.fresh = true; } // 板書プレビューは最初の画面の解説をすべて表示
   st.page = -1; applyStep(p);
 }
 function renderOriginalOnly() { if ($("tab-board").classList.contains("active")) renderSurface("b"); if (!$("presentation").hidden) renderSurface("p"); }
@@ -306,6 +308,7 @@ function updateLinesNote() {
 function syncViewUI() {
   if (!current) return; const v = current.view;
   document.querySelectorAll(".auto-fit").forEach(c => { c.checked = v.auto; });
+  document.querySelectorAll(".auto-reset").forEach(b => { b.classList.toggle("primary", !v.auto); b.disabled = v.auto; });
   document.querySelectorAll(".brk-toggle").forEach(c => { c.checked = v.brk; });
   document.querySelectorAll(".per-select").forEach(c => { c.value = v.per; });
   $("v-opx").value = v.oPx || Math.round(lastFit.o); $("v-tpx").value = v.tPx || Math.round(lastFit.t); $("v-wpx").value = v.wPx || Math.round(lastFit.w);
@@ -530,7 +533,7 @@ document.querySelectorAll(".show-pane").forEach(cb => cb.onchange = () => render
 $("reveal-mode").onclick = () => stepBy("b", -1);
 $("reveal-next").onclick = () => stepBy("b", 1);
 $("reveal-all").onclick = () => revealPage("b");
-$("reveal-reset").onclick = () => { S.b.step = 0; applyStep("b"); };
+$("reveal-reset").onclick = () => { S.b.fresh = false; S.b.step = 0; applyStep("b"); };
 $("print-board").onclick = () => { revealPage("b"); window.print(); };
 
 function setAuto(on) {
@@ -609,7 +612,7 @@ function exitPres() {
   renderAll();
 }
 let presBarMode = 0; // 0=コンパクト(1段) 1=ペン・強調ツールも表示 2=すべて隠す（提示内容を最大に）
-function setBarMode(m) { presBarMode = m; $("pres-bar").hidden = m === 2; $("pres-foot").hidden = m === 2; $("pres-more").hidden = m !== 1; $("pres-bar-toggle").classList.toggle("on", m !== 0); $("pres-bar-toggle").textContent = m === 0 ? "⚙ ツール" : m === 1 ? "⚙ 閉じる" : "⚙ 戻す"; }
+function setBarMode(m) { presBarMode = m; $("pres-bar").hidden = m === 2; $("pres-foot").hidden = m === 2 && !document.body.classList.contains("coarse"); $("pres-more").hidden = m !== 1; $("pres-bar-toggle").classList.toggle("on", m !== 0); $("pres-bar-toggle").textContent = m === 0 ? "⚙ ツール" : m === 1 ? "⚙ 閉じる" : "⚙ 戻す"; }
 function togglePresBar() { setBarMode((presBarMode + 1) % 3); }
 $("project-btn").onclick = openPres;
 $("pres-exit").onclick = exitPres;
@@ -627,7 +630,7 @@ document.addEventListener("keydown", e => {
   if (tag === "textarea" || tag === "select") return;
   const k = e.key, ctrl = e.ctrlKey || e.metaKey;
   if (ctrl && (k === "z" || k === "Z")) { if (!$("presentation").hidden || $("tab-board").classList.contains("active")) { e.preventDefault(); undo(); } return; }
-  if ($("presentation").hidden) return;
+  if ($("presentation").hidden || !$("picker").hidden) return;
   if (k === "ArrowRight" || k === " " || k === "PageDown" || k === "Enter") { e.preventDefault(); stepBy("p", 1); }
   else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace") { e.preventDefault(); stepBy("p", -1); }
   else if (k === "Home") { S.p.step = 0; applyStep("p"); }
@@ -776,7 +779,7 @@ const isViewer = () => { const c = rd(SYNC_KEY, null); return !!(c && c.repo && 
 function viewerBlock() { if (isViewer()) { toast("この端末は閲覧専用です。編集は編集端末で行ってください"); return true; } return false; }
 function applyRole() {
   const v = isViewer(); document.body.classList.toggle("viewer", v);
-  document.querySelector(".brand small").textContent = "高校古典・授業支援システム v4" + (v ? "（閲覧専用）" : "");
+  document.querySelector(".brand small").textContent = "高校古典・授業支援システム v5" + (v ? "（閲覧専用）" : "");
   if (v && $("tab-edit").classList.contains("active")) document.querySelector('[data-tab="board"]').click();
 }
 const syncCfg = () => { const c = rd(SYNC_KEY, null); return c && c.repo && c.token ? c : null; };
@@ -940,6 +943,115 @@ $("sync-code-apply").onclick = () => {
     fillSyncForm(); applyRole(); document.querySelector('[data-tab="board"]').click(); syncNow(true);
   } catch (e) { toast("接続コードを読み取れませんでした"); }
 };
+
+
+/* ================= iPad操作：大きなボタン・スワイプ ================= */
+const coarseMQ = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
+const setCoarse = () => document.body.classList.toggle("coarse", !!(coarseMQ && coarseMQ.matches) || navigator.maxTouchPoints > 1);
+setCoarse(); if (coarseMQ && coarseMQ.addEventListener) coarseMQ.addEventListener("change", setCoarse);
+$("bn-prev").onclick = () => stepBy("b", -1); $("bn-next").onclick = () => stepBy("b", 1);
+$("pres-prev2").onclick = () => stepBy("p", -1); $("pres-next2").onclick = () => stepBy("p", 1);
+document.querySelectorAll(".auto-reset").forEach(b => b.onclick = () => { if (!current) return; setAuto(true); toast("自動で大きく表示に戻しました"); });
+function bindSwipe(el, p) {
+  let s = null;
+  el.addEventListener("pointerdown", e => { s = e.pointerType === "touch" && !fingerDraw ? { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId } : null; });
+  el.addEventListener("pointercancel", () => { s = null; });
+  el.addEventListener("pointerup", e => {
+    if (!s || e.pointerId !== s.id) return; const dx = e.clientX - s.x, dy = e.clientY - s.y, dt = Date.now() - s.t; s = null;
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 50 && Math.abs(dx) > Math.abs(dy) * 2 && dt < 700) stepBy(p, dx < 0 ? 1 : -1);
+  });
+}
+bindSwipe($("stage-b"), "b"); bindSwipe($("stage-area"), "p");
+
+/* ================= PC編集：ショートカット ================= */
+document.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey) || isViewer()) return;
+  if (e.key === "s" || e.key === "S") { e.preventDefault(); if (current && $("tab-edit").classList.contains("active")) { $("save-lesson").click(); } }
+  else if (e.key === "Enter" && $("tab-edit").classList.contains("active") && $("presentation").hidden) { e.preventDefault(); document.querySelector('[data-tab="board"]').click(); }
+});
+
+/* ================= 指名（出席番号のランダム抽選） ================= */
+const PICK_KEY = "koten-board-picker";
+const pk = Object.assign({ from: 1, to: 40, count: 1, skip: "", noRepeat: true, done: [], last: [] }, rd(PICK_KEY, {}));
+const savePk = () => wr(PICK_KEY, pk);
+const z2h = s => String(s).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+function parseNums(s) {
+  const out = new Set();
+  z2h(s).replace(/[〜～－ー–—]/g, "-").split(/[,、，\s]+/).forEach(t => { const m = t.match(/^(\d+)(?:-(\d+))?$/); if (!m) return; let a = +m[1], b = m[2] ? +m[2] : a; if (a > b) [a, b] = [b, a]; for (let i = a; i <= Math.min(b, a + 999); i++) out.add(i); });
+  return out;
+}
+function rndInt(n) {
+  const c = window.crypto && window.crypto.getRandomValues;
+  if (!c) return Math.floor(Math.random() * n);
+  const a = new Uint32Array(1), lim = Math.floor(4294967296 / n) * n;
+  do { window.crypto.getRandomValues(a); } while (a[0] >= lim);
+  return a[0] % n;
+}
+function readPk() {
+  let f = Math.round(+z2h($("pk-from").value)) || 1, t = Math.round(+z2h($("pk-to").value)) || f;
+  f = clamp(f, 1, 999); t = clamp(t, 1, 999); if (f > t) [f, t] = [t, f];
+  Object.assign(pk, { from: f, to: t, skip: $("pk-skip").value, noRepeat: $("pk-norep").checked }); savePk();
+}
+function pkPool() {
+  const skip = parseNums(pk.skip), done = new Set(pk.noRepeat ? pk.done : []), all = [];
+  for (let i = pk.from; i <= pk.to; i++) if (!skip.has(i) && !done.has(i)) all.push(i);
+  return all;
+}
+function pkInfo() {
+  const total = pk.to - pk.from + 1 - [...parseNums(pk.skip)].filter(n => n >= pk.from && n <= pk.to).length, rest = pkPool().length;
+  $("pk-info").textContent = `対象 ${total}人` + (pk.noRepeat ? ` ／ 残り ${rest}人（当選済み ${pk.done.filter(n => n >= pk.from && n <= pk.to).length}人）` : "");
+  $("pk-go").disabled = pkBusy;
+}
+function pkShow(nums, cls) {
+  const r = $("pk-result"); r.className = "pk-result n" + Math.min(5, Math.max(1, nums.length)) + (cls ? " " + cls : "");
+  r.innerHTML = nums.map(n => `<span class="pk-num">${n}</span>`).join("");
+}
+function pkFill() {
+  $("pk-from").value = pk.from; $("pk-to").value = pk.to; $("pk-skip").value = pk.skip; $("pk-norep").checked = pk.noRepeat;
+  document.querySelectorAll(".pk-count").forEach(b => b.classList.toggle("on", +b.dataset.n === pk.count));
+  pkInfo();
+}
+let pkBusy = false;
+function pkDraw() {
+  if (pkBusy) return; readPk();
+  const pool = pkPool();
+  if (!pool.length) { toast(pk.noRepeat && pk.done.length ? "全員が当選済みです。「当たり履歴をリセット」を押してください" : "対象の番号がありません"); pkInfo(); return; }
+  const n = Math.min(pk.count, pool.length); if (n < pk.count) toast(`残り${pool.length}人のため${n}人を指名します`);
+  const res = []; const tmp = pool.slice();
+  for (let i = 0; i < n; i++) res.push(tmp.splice(rndInt(tmp.length), 1)[0]);
+  res.sort((a, b) => a - b);
+  pkBusy = true; $("pk-go").disabled = true;
+  const rollPool = pool.length > 1 ? pool : [pool[0]]; let ticks = 0;
+  const iv = setInterval(() => {
+    ticks++; pkShow(Array.from({ length: n }, () => rollPool[rndInt(rollPool.length)]), "roll");
+    if (ticks >= 14) {
+      clearInterval(iv); pkBusy = false;
+      pkShow(res, "fin"); pk.last = res;
+      if (pk.noRepeat) res.forEach(x => { if (!pk.done.includes(x)) pk.done.push(x); });
+      savePk(); pkInfo();
+    }
+  }, 70);
+}
+function openPicker() {
+  const host = !$("presentation").hidden ? $("presentation") : document.body;
+  if ($("picker").parentElement !== host) host.appendChild($("picker"));
+  $("picker").hidden = false; pkFill();
+  if (pk.last && pk.last.length) pkShow(pk.last, "fin");
+}
+function closePicker() { $("picker").hidden = true; }
+$("pick-btn").onclick = openPicker; $("pres-pick").onclick = openPicker; $("pres-pick2").onclick = openPicker; $("pk-close").onclick = closePicker;
+$("picker").addEventListener("click", e => { if (e.target === $("picker")) closePicker(); });
+$("pk-go").onclick = pkDraw;
+$("pk-reset").onclick = () => { pk.done = []; pk.last = []; savePk(); pkInfo(); $("pk-result").className = "pk-result"; $("pk-result").innerHTML = '<span class="pk-ph">履歴をリセットしました</span>'; };
+["pk-from", "pk-to", "pk-skip", "pk-norep"].forEach(id => $(id).addEventListener("input", () => { readPk(); pkInfo(); }));
+$("pk-from").addEventListener("change", () => { readPk(); pkFill(); }); $("pk-to").addEventListener("change", () => { readPk(); pkFill(); });
+document.querySelectorAll(".pk-count").forEach(b => b.onclick = () => { pk.count = +b.dataset.n; savePk(); pkFill(); });
+document.addEventListener("keydown", e => {
+  if (!$("picker").hidden) { if (e.key === "Escape") { e.stopImmediatePropagation(); closePicker(); } return; }
+  if (($("presentation").hidden) || e.ctrlKey || e.metaKey) return;
+  const tag = (e.target.tagName || "").toLowerCase(); if (tag === "input" || tag === "textarea" || tag === "select") return;
+  if (e.key === "r" || e.key === "R") openPicker();
+}, true);
 
 /* ================= 初期化 ================= */
 const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => { layoutStage("b"); if (!$("presentation").hidden) layoutStage("p"); redrawAll(); }) : null;

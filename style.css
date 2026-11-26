@@ -205,3 +205,66 @@ code{background:#eef2ef;padding:1px 5px;border-radius:4px}
 /* ---- 閲覧専用端末：編集系の操作を隠す ---- */
 body.viewer [data-tab="edit"],body.viewer #tab-edit,body.viewer #new-lesson,body.viewer #duplicate,body.viewer #delete,body.viewer .side-foot .file-label,body.viewer [data-tools="mark"],body.viewer .mark-hint{display:none!important}
 .sync-grid select{display:block;width:100%;margin-top:6px;padding:10px 11px;border:1px solid #d5ded8;border-radius:7px;background:#fbfcfb;font-size:14px}
+
+/* ---- v5.1: 自動サイズに戻す／iPad操作／PC編集／指名 ---- */
+.auto-reset{white-space:nowrap}
+.b-nav{display:none}
+.presentation-foot{align-items:center;gap:10px}
+.pf-nav{display:flex;align-items:center;gap:12px;margin-left:auto}
+.pf-nav #pres-count{color:#d7e4db;font-size:13px;min-width:7em;text-align:center}
+.presentation-foot .nav-btn{background:#254438;color:#fff;border-color:var(--bdline);min-width:120px}
+.presentation-foot .nav-btn.primary{background:#d8b96c;color:#18352c;border-color:#d8b96c}
+.nav-btn{min-height:44px;font-size:15px;padding:8px 20px}
+.stage-wrap,.stage-area{touch-action:pan-y}
+/* iPad（タッチ端末）：押しやすく */
+body.coarse .btn{min-height:44px;font-size:14px;padding:9px 16px}
+body.coarse .btn.small{min-height:44px;font-size:14px}
+body.coarse .tab{padding:14px 18px;font-size:15px}
+body.coarse .check{font-size:14px;min-height:40px;display:inline-flex;align-items:center;gap:6px}
+body.coarse .check input[type=checkbox]{width:22px;height:22px}
+body.coarse .per-select,body.coarse .check select{min-height:40px;font-size:14px}
+body.coarse .kbd-hint{display:none}
+body.coarse .nav-btn{min-height:56px;font-size:18px;min-width:140px}
+body.coarse .pres-handle{min-height:44px;font-size:14px;opacity:.7}
+body.coarse .presentation-bar .btn{min-height:44px}
+body.coarse .b-nav{display:flex;position:sticky;bottom:0;z-index:6;justify-content:center;align-items:center;gap:16px;padding:10px;margin-top:10px;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding-bottom:max(10px,env(safe-area-inset-bottom))}
+body.viewer .b-nav{display:flex;position:sticky;bottom:0;z-index:6;justify-content:center;align-items:center;gap:16px;padding:10px;margin-top:10px;background:rgba(255,255,255,.96);border-top:1px solid var(--line)}
+.bn-count{font-size:14px;color:var(--muted);min-width:9em;text-align:center}
+body.coarse .item-ops .btn,body.coarse .ic-ops .btn{min-height:44px}
+@media print{.b-nav{display:none!important}}
+/* PC（広い画面）：左に授業情報・本文・訳、右に語句・文法を並べて、スクロールせず入力 */
+@media(min-width:1180px){
+ .editor-grid{grid-template-columns:minmax(440px,1fr) minmax(520px,1.15fr);align-items:start}
+ .editor-grid>.card:nth-child(1){grid-column:1;grid-row:1}
+ .editor-grid>.card:nth-child(2){grid-column:1;grid-row:2}
+ .editor-grid>.card:nth-child(4){grid-column:1;grid-row:3}
+ .editor-grid>.card:nth-child(3){grid-column:2;grid-row:1/span 3;position:sticky;top:78px;max-height:calc(100vh - 96px);overflow:auto}
+ #lesson-original{min-height:15em}#lesson-translation{min-height:13em}
+ .main{max-width:1500px}
+}
+/* 指名 */
+.picker{position:fixed;inset:0;z-index:60;background:rgba(10,25,20,.78);display:flex;align-items:center;justify-content:center;padding:14px}
+.picker[hidden]{display:none}
+.pk-card{background:#fff;border-radius:16px;width:min(960px,100%);max-height:100%;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.pk-head{display:flex;justify-content:space-between;align-items:center}.pk-head strong{font-size:18px}
+.pk-set{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;padding:10px 12px;background:#f3f7f4;border-radius:10px}
+.pk-set label{font-size:13px;font-weight:700;color:#45534b;display:flex;align-items:center;gap:8px}
+.pk-set input[type=number]{width:5.2em;padding:9px;font-size:18px;text-align:center;border:1px solid #cbd6cf;border-radius:8px}
+.pk-set input[type=text]{width:12em;padding:9px;font-size:16px;border:1px solid #cbd6cf;border-radius:8px}
+.pk-range span{display:inline-flex;align-items:center;gap:6px}
+.pk-cnt{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#45534b}
+.pk-count{min-width:46px;min-height:44px;font-size:18px;font-weight:800}
+.pk-count.on{background:var(--green);color:#fff;border-color:var(--green)}
+.pk-result{min-height:min(46vh,380px);display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center;justify-content:center;background:#18352c;border-radius:14px;padding:16px;color:#fff}
+.pk-ph{color:#a9bdb1;font-size:18px}
+.pk-num{font-weight:900;line-height:1;font-feature-settings:"tnum";font-size:min(34vh,34vw);color:#ffe28a;text-shadow:0 4px 18px rgba(0,0,0,.35)}
+.pk-result.n2 .pk-num{font-size:min(28vh,24vw)}.pk-result.n3 .pk-num{font-size:min(26vh,19vw)}.pk-result.n4 .pk-num{font-size:min(24vh,15vw)}.pk-result.n5 .pk-num{font-size:min(22vh,13vw)}
+.pk-result.roll .pk-num{color:#9fb7aa;filter:blur(1px)}
+.pk-result.fin .pk-num{animation:pkpop .45s ease-out}
+@keyframes pkpop{0%{transform:scale(.6);opacity:.2}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+.pk-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pk-go{min-height:56px;font-size:20px;padding:10px 34px}
+.pk-info{margin:0}
+.pres-handle{right:auto;left:10px;bottom:8px}
+.presentation-foot{padding-left:112px;min-height:58px}
+body.coarse .presentation-foot{min-height:72px}
