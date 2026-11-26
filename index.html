@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#18352c">
 <meta name="description" content="高校古典の授業準備・板書・投影を支援するWebアプリ">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <title>KOTEN BOARD｜古典授業支援</title>
 </head>
 <body>
@@ -35,9 +35,10 @@
      <label>授業の目標<textarea id="lesson-goal" rows="2" placeholder="例：係り結びの働きを理解する"></textarea></label>
     </div>
     <div class="card editor-card">
-     <div class="card-title"><div><span class="step">02</span><strong>本文・現代語訳</strong></div><span class="hint">本文と訳は「同じ行数」で対応します</span></div>
-     <label>古文本文（縦書きで表示）<textarea id="lesson-original" rows="6" placeholder="古文本文を入力。1行が縦書きの1列になります。"></textarea></label>
-     <label>現代語訳（本文の各行に対応）<textarea id="lesson-translation" rows="5" placeholder="現代語訳を入力。本文と同じ行数にすると対応が分かります。"></textarea></label>
+     <div class="card-title"><div><span class="step">02</span><strong>本文・現代語訳</strong></div><span class="hint">本文と訳は「同じ文の数」で一文ずつ対応します</span></div>
+     <label>古文本文（縦書きで表示）<textarea id="lesson-original" rows="6" placeholder="古文本文を入力。「。」ごとに一文として、縦書きで表示されます。"></textarea></label>
+     <label>現代語訳（本文の一文ずつに対応）<textarea id="lesson-translation" rows="5" placeholder="現代語訳を入力。本文と同じ文の数にすると、一文ずつ本文の隣に表示されます。"></textarea></label>
+     <p id="lines-note" class="hint lines-note"></p>
      <div class="button-row"><button id="split-lines" class="btn">本文を句点で改行</button><button id="split-trans" class="btn">現代語訳を句点で改行</button><button id="copy-original" class="btn">本文をコピー</button></div>
     </div>
     <div class="card editor-card full-card">
@@ -74,11 +75,11 @@
       <label class="check"><input type="checkbox" class="show-pane" data-pane="words" checked>語句・品詞</label>
       <label class="check"><input type="checkbox" class="show-pane" data-pane="gram" checked>文法事項</label>
      </div>
-     <div class="toolbar-group"><strong>段階表示</strong><button id="reveal-mode" class="btn small">開始</button><button id="reveal-next" class="btn small primary">次を表示 ▶</button><button id="reveal-all" class="btn small">すべて表示</button></div>
+     <div class="toolbar-group"><strong>解説を一文ずつ表示</strong><button id="reveal-mode" class="btn small">◀ 前へ</button><button id="reveal-next" class="btn small primary">次へ ▶</button><button id="reveal-all" class="btn small">この画面を全部表示</button><button id="reveal-reset" class="btn small">最初に戻す</button><span id="b-count" class="hint"></span></div>
      <div class="toolbar-group">
+      <label class="check">一度に表示する文<select class="per-select"><option value="auto">自動</option><option value="1">1文</option><option value="2">2文</option><option value="3">3文</option><option value="4">4文</option><option value="all">全部</option></select></label>
       <label class="check"><input type="checkbox" class="auto-fit">自動で大きく</label>
-      <label class="check"><input type="checkbox" class="hdr-toggle">見出し</label>
-      <label class="check"><input type="checkbox" class="brk-toggle">「。」で改行</label>
+      <label class="check"><input type="checkbox" class="brk-toggle">「。」で区切る</label>
       <button id="print-board" class="btn small">印刷 / PDF</button>
      </div>
     </div>
@@ -89,8 +90,9 @@
     </div>
     <details class="adv"><summary>文字の大きさ・行間・字間を手動で調整</summary>
      <div class="toolbar-group">
-      <label class="range">本文の大きさ<input id="v-opx" type="range" min="24" max="260" step="2"></label>
-      <label class="range">解説の大きさ<input id="v-lpx" type="range" min="14" max="110" step="1"></label>
+      <label class="range">本文<input id="v-opx" type="range" min="24" max="340" step="2"></label>
+      <label class="range">現代語訳<input id="v-tpx" type="range" min="16" max="260" step="1"></label>
+      <label class="range">語句・文法<input id="v-wpx" type="range" min="14" max="160" step="1"></label>
       <label class="range">行間<input id="v-lh" type="range" min="1.3" max="3.2" step="0.1"></label>
       <label class="range">字間<input id="v-ls" type="range" min="0" max="0.5" step="0.02"></label>
       <span class="hint">「自動で大きく」をOFFにすると大きさを手動で指定できます。</span>
@@ -145,13 +147,15 @@
      <li>左の「＋ 新規」から授業教材を作ります。入力した内容は自動で保存され、板書・投影にもすぐ反映されます。</li>
      <li>本文は1行＝縦書きの1列です。現代語訳は本文と同じ行数で入力すると、番号で対応します。</li>
      <li>語句・品詞・文法事項は「＋ 助動詞」などのボタンで追加し、品詞・活用の種類・活用形・意味・説明を入力します。</li>
-     <li>「板書プレビュー」「投影モード」は、本文・現代語訳・語句・文法のすべてが<b>縦書き</b>で、右から左へ並びます。表示する項目だけが画面いっぱいに大きくなります（「自動で大きく」）。「。」ごとに自動で改行して短く表示できます（「「。」で改行」。入力した本文自体は変わりません）。見出しも隠せます。</li>
+     <li>「板書プレビュー」「投影モード」は、本文の<b>一文ごと</b>に、右から「本文 → 現代語訳 → 語句 → 文法」が縦書きで並びます（1文目が右端）。入力した本文は「。」ごとに一文に区切られます。</li>
+     <li><b>「次へ」を押すたびに、次の一文の解説（現代語訳・語句・文法）が出ます。</b>本文は先に見えているので、読んでから解説を出せます。画面に入りきらない分は自動で次の画面に切り替わります。「一度に表示する文」で1画面の文数を選べます。</li>
+     <li>語句・文法が違う文に表示されるときは、教材編集の各項目の「表示する文」で何文目かを指定してください（通常は「自動」で、本文中に語句が出てくる文に表示されます）。</li>
      <li>「✨ AIで語句・文法を自動入力」（要APIキー）で、本文から語句・品詞・活用・意味・文法説明の下書きを作れます。必ず内容を確認してください。</li>
      <li>投影モードは←→キーまたは「次へ」で、本文→現代語訳→語句→文法の順に提示できます。</li>
      <li>手書きはApple Pencilで画面に触れると自動で手書きONになります（指では描きません。指でのタップは通常どおり反応します）。</li>
     </ol>
     <h3>投影モードのキー操作</h3>
-    <p>→ / Space：次へ　← ：戻る　A：全表示　1〜4：本文・現代語訳・語句・文法の表示切替　＋ / −：文字サイズ　F：自動拡大のON/OFF　H：見出し　K：「。」改行　T：ツールバーの表示/非表示　D：手書き　E：消しゴム　Ctrl+Z：元に戻す　Esc：終了</p>
+    <p>→ / Space / Enter：次の文の解説　← ：前に戻る　A：この画面を全部表示　Home：最初から　1〜4：本文・現代語訳・語句・文法の列の表示切替　＋ / −：文字サイズ　F：自動拡大のON/OFF　K：「。」で区切る/区切らない　T：ツールバーの表示/非表示　D：手書き　E：消しゴム　Ctrl+Z：元に戻す　Esc：終了</p>
     <h3>板書の大きさと手書きについて</h3>
     <p>板書は常に「16:9の固定サイズ」で組まれ、画面に合わせて拡大縮小されます。そのため、画面の大きさ・向き・端末が変わっても配置は崩れず、手書きの位置もずれません。手書きは<b>表示内容の組み合わせ</b>（本文のみ／本文＋解説／解説のみ）ごとに保存されます。表示内容が変わると文字の位置が変わるためです。</p>
     <h3>文法候補抽出について</h3>
@@ -167,12 +171,12 @@
  <div id="pres-bar" class="presentation-bar">
   <div class="pb-row">
    <span id="pres-label" class="pb-label">KOTEN BOARD</span>
-   <div class="pb-group"><button id="pres-prev" class="btn">◀ 戻る</button><button id="pres-next" class="btn primary">次へ ▶</button><button id="pres-all" class="btn">全表示</button></div>
+   <div class="pb-group"><button id="pres-prev" class="btn">◀ 戻る</button><button id="pres-next" class="btn primary">次へ ▶</button><button id="pres-all" class="btn">この画面を全部表示</button></div>
    <div class="pb-group"><button class="btn pres-pane" data-pane="0">1 本文</button><button class="btn pres-pane" data-pane="1">2 現代語訳</button><button class="btn pres-pane" data-pane="2">3 語句</button><button class="btn pres-pane" data-pane="3">4 文法</button></div>
    <div class="pb-group">
+    <label class="check">一度に表示する文<select class="per-select"><option value="auto">自動</option><option value="1">1文</option><option value="2">2文</option><option value="3">3文</option><option value="4">4文</option><option value="all">全部</option></select></label>
     <label class="check"><input type="checkbox" class="auto-fit">自動で大きく</label>
-    <label class="check"><input type="checkbox" class="hdr-toggle">見出し</label>
-      <label class="check"><input type="checkbox" class="brk-toggle">「。」で改行</label>
+    <label class="check"><input type="checkbox" class="brk-toggle">「。」で区切る</label>
     <button class="btn" id="pres-osize-down">本文 小</button><button class="btn" id="pres-osize-up">本文 大</button>
     <button class="btn" id="pres-lsize-down">解説 小</button><button class="btn" id="pres-lsize-up">解説 大</button>
    </div>
@@ -187,7 +191,7 @@
   </div>
  </div>
  <div id="stage-area" class="stage-area"><div id="stage-p" class="stage-wrap"><div id="pres-board" class="board drawing-board"></div></div></div>
- <div id="pres-foot" class="presentation-foot"><span>→/Space 次へ ・ ← 戻る ・ A 全表示 ・ 1〜4 表示切替 ・ T ツール欄 ・ D 手書き ・ Esc 終了</span><span id="pres-count">全表示</span></div>
+ <div id="pres-foot" class="presentation-foot"><span>→/Space/Enter 次の文の解説 ・ ← 戻る ・ A この画面を全部表示 ・ Home 最初から ・ 1〜4 列の表示切替 ・ T ツール欄 ・ D 手書き ・ Esc 終了</span><span id="pres-count"></span></div>
  <button id="pres-bar-toggle" class="pres-handle" aria-label="ツールバーの表示切替">⚙ ツール</button>
 </div>
 
@@ -195,6 +199,6 @@
 <datalist id="dl-conj"><option value="四段"><option value="上一段"><option value="上二段"><option value="下一段"><option value="下二段"><option value="カ変"><option value="サ変"><option value="ナ変"><option value="ラ変"><option value="ク活用"><option value="シク活用"><option value="ナリ活用"><option value="タリ活用"><option value="特殊型"><option value="形容詞型"><option value="形容動詞型"><option value="四段型"><option value="下二段型"><option value="ラ変型"><option value="無変化型"></datalist>
 <datalist id="dl-form"><option value="未然形"><option value="連用形"><option value="終止形"><option value="連体形"><option value="已然形"><option value="命令形"></datalist>
 <div id="toast" role="status" aria-live="polite"></div>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

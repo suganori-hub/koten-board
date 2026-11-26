@@ -37,7 +37,7 @@ const demo = {
 /* ================= データ正規化・マイグレーション ================= */
 function normItem(it) {
   it = it && typeof it === "object" ? it : {};
-  const o = { ...it, type: str(it.type) || "その他", term: str(it.term), pos: str(it.pos), conjType: str(it.conjType), conjForm: str(it.conjForm), meaning: str(it.meaning), explain: str(it.explain) };
+  const o = { ...it, type: str(it.type) || "その他", term: str(it.term), pos: str(it.pos), conjType: str(it.conjType), conjForm: str(it.conjForm), meaning: str(it.meaning), explain: str(it.explain), line: it.line == null ? "" : String(it.line) };
   if (it.ai) o.ai = true; else delete o.ai;
   return o;
 }
@@ -53,8 +53,8 @@ function normLesson(x) {
     drawings: (Array.isArray(x.drawings) ? x.drawings : []).filter(s => s && Array.isArray(s.points)),
     view: {
       lh: clamp(+v.lh || 1.8, 1.2, 3.5), ls: clamp(v.ls == null || isNaN(+v.ls) ? 0.06 : +v.ls, 0, 0.6),
-      auto: v.auto !== false, oPx: clamp(+v.oPx || oldSize || 0, 0, 320), lPx: clamp(+v.lPx || 0, 0, 140),
-      header: v.header !== false, brk: v.brk !== false
+      auto: v.auto !== false, oPx: clamp(+v.oPx || oldSize || 0, 0, 340), tPx: clamp(+v.tPx || 0, 0, 260), wPx: clamp(+v.wPx || 0, 0, 160),
+      per: ["auto", "1", "2", "3", "4", "all"].includes(String(v.per)) ? String(v.per) : "auto", brk: v.brk !== false
     },
     updatedAt: Number(x.updatedAt) || 0, ver: SCHEMA
   };
@@ -78,12 +78,11 @@ function load() {
 
 /* ================= 状態 ================= */
 let lessons = load(), tombs = rd(TOMB_KEY, {}), vdraw = rd(VDRAW_KEY, {}), current = null;
-let staged = false, revealStep = 4;
-let presStep = 0, presShow = [false, false, false, false];
+let presShow = [true, true, true, true];
 let hiddenTypes = new Set(), focusTerm = "", activeLine = -1, lastSel = null;
 let saveTimer = 0, renderQueued = false, pendingRender = false, strokeActive = false, lastEditAt = 0;
 let drawingEnabled = false, eraserMode = false, penColor = "#ffdf55", penWidth = 3, fingerDraw = false, autoPen = true;
-const stageScale = { b: 1, p: 1 }; let lastFit = { o: 60, t: 36 };
+const stageScale = { b: 1, p: 1 }; let lastFit = { o: 60, t: 45, w: 30 };
 
 /* ================= 保存 ================= */
 function setStatus(t) { $("save-status").textContent = t; }
@@ -98,15 +97,8 @@ function scheduleSave() { setStatus("保存中…"); clearTimeout(saveTimer); sa
 function markDirty() { if (!current) return; if (isViewer()) { scheduleSave(); return; } current.updatedAt = Date.now(); lastEditAt = Date.now(); scheduleSave(); scheduleSync(); }
 function toast(s) { const t = $("toast"); t.textContent = s; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2600); }
 
-/* ================= 盤面の骨組み（全パネル縦書き） ================= */
-const skeleton = p => `
-<div class="board-head" id="${p}-head"><h2 id="${p}-title"></h2><span class="board-source" id="${p}-source"></span><span class="board-meta"><span id="${p}-class"></span><span id="${p}-session"></span></span></div>
-<div class="board-cols" id="${p}-cols">
- <section class="pane pane-orig" id="${p}-orig-wrap"><h3 class="yellow">本文</h3><div id="${p}-original" class="vtext original-text"></div></section>
- <section class="pane pane-tr" id="${p}-tr-wrap"><h3 class="cyan">現代語訳</h3><div id="${p}-translation" class="vtext translation-text"></div></section>
- <section class="pane pane-words" id="${p}-words-wrap"><h3 class="gold">語句・品詞</h3><div id="${p}-words" class="vtext items"></div></section>
- <section class="pane pane-gram" id="${p}-gram-wrap"><h3 class="pink">文法事項</h3><div id="${p}-gram" class="vtext items"></div></section>
-</div>
+/* ================= 盤面の骨組み（本文の一文ごとに「本文→現代語訳→語句→文法」を右から左へ横並び） ================= */
+const skeleton = p => `<div class="groups" id="${p}-groups"></div>
 <canvas class="draw-canvas" id="${p}-canvas" width="${STAGE_W}" height="${STAGE_H}"></canvas>`;
 
 const penTools = () => `
@@ -128,14 +120,22 @@ $("board").innerHTML = skeleton("b");
 $("pres-board").innerHTML = skeleton("p");
 document.querySelectorAll("[data-tools]").forEach(el => { el.innerHTML = el.dataset.tools === "pen" ? penTools() : markTools(); });
 
-/* ================= 表示用の文章分割（「。」改行） ================= */
+const hostOf = p => $(p === "b" ? "board" : "pres-board");
+const paneOn = (p, i) => (p === "p" ? presShow[i] : document.querySelector(`.show-pane[data-pane="${PANES[i]}"]`).checked);
+// 表示状態：step＝解説を表示した文の数（0〜G）。pages＝1画面に出す文の範囲。page＝今の画面。
+const S = { b: { step: null, pages: [], page: -1, key: "", G: 0 }, p: { step: 0, pages: [], page: -1, key: "", G: 0 } };
+const MIN_O = 56; // 「自動」で1画面に入れる文の数を決めるときの、本文の最小文字サイズ(px)
+
+/* ---------- 文の分割・語句の割り当て ---------- */
 const getOrig = () => (current ? current.original.replace(/\r/g, "") : "");
-function lineList(text, brk) { // [{s: 元文字列での開始位置, t: 表示行}]
+function lineList(text, brk) { // [{s: 元文字列での開始位置, t: 表示する一文}]
   const out = []; let off = 0;
   const re = /[^。！？]*[。！？]+[」』）)]*|[^。！？]+/g;
   for (const raw of text.split("\n")) {
-    if (brk) { re.lastIndex = 0; let m; while ((m = re.exec(raw))) if (m[0].trim()) out.push({ s: off + m.index, t: m[0] }); }
-    else if (raw.trim()) out.push({ s: off, t: raw });
+    if (brk) {
+      re.lastIndex = 0; let m;
+      while ((m = re.exec(raw))) { const t = m[0], lead = t.length - t.trimStart().length; if (t.trim()) out.push({ s: off + m.index + lead, t: t.trim() }); }
+    } else if (raw.trim()) out.push({ s: off + raw.length - raw.trimStart().length, t: raw.trim() });
     off += raw.length + 1;
   }
   return out;
@@ -148,31 +148,53 @@ function hitSet(text, term) {
   for (let i = text.indexOf(t); i >= 0; i = text.indexOf(t, i + t.length)) for (let k = 0; k < t.length; k++) s.add(i + k);
   return s;
 }
-function originalHTML() {
-  const text = getOrig();
-  if (!text.trim()) return '<p class="empty">本文が未入力です</p>';
-  const cls = new Array(text.length).fill(0);
-  current.marks.forEach(m => { for (let i = Math.max(0, m.s); i < Math.min(text.length, m.e); i++) cls[i] = m.c; });
-  const hits = hitSet(text, focusTerm);
-  return lineList(text, current.view.brk).map((ln, n) => {
-    let idx = ln.s, h = `<p class="vline${activeLine === n ? " active" : ""}" data-line="${n}"><span class="lno">${n + 1}</span>`;
-    for (const ch of ln.t) {
-      const c = [cls[idx] ? "m" + cls[idx] : "", hits.has(idx) ? "hit" : ""].filter(Boolean).join(" ");
-      h += `<span class="ch${c ? " " + c : ""}" data-i="${idx}">${esc(ch)}</span>`; idx += ch.length;
-    }
-    return h + "</p>";
-  }).join("");
+function lineOfItem(it, texts) { // 語句が出てくる文の番号。手動指定（対応行）があればそれを優先
+  const n = texts.length, m = parseInt(it.line, 10);
+  if (m >= 1 && m <= n) return m - 1;
+  const t = str(it.term).trim(); if (!t) return -1;
+  const cands = [t]; t.split(/[〜～~・／/、，,]/).map(x => x.trim()).filter(x => x && x !== t).forEach(x => cands.push(x));
+  for (const c of cands) for (let k = c.length; k >= Math.min(2, c.length); k--) { const i = texts.findIndex(x => x.includes(c.slice(0, k))); if (i >= 0) return i; }
+  return -1;
 }
-function translationHTML() {
-  const lines = lineList(str(current.translation).replace(/\r/g, ""), current.view.brk);
-  if (!lines.length) return '<p class="empty">現代語訳が未入力です</p>';
-  return lines.map((l, i) => `<p class="vline tr${activeLine === i ? " active" : ""}" data-line="${i}"><span class="lno">${i + 1}</span>${esc(l.t)}</p>`).join("");
+function trLinesFor(n) { // 本文のi番目の文 ⇔ 現代語訳のi番目の文
+  const tl = lineList(str(current.translation).replace(/\r/g, ""), current.view.brk).map(l => l.t);
+  const out = []; for (let i = 0; i < n; i++) out.push(tl[i] || "");
+  if (tl.length > n && n > 0) out[n - 1] += tl.slice(n).join("");
+  return out;
+}
+function buildGroups() {
+  const sents = lineList(getOrig(), current.view.brk), n = sents.length, texts = sents.map(x => x.t), tr = trLinesFor(n);
+  const groups = sents.map((s, i) => ({ s, orig: true, tr: tr[i], words: [], gram: [] }));
+  const rest = { s: null, orig: false, tr: "", words: [], gram: [] };
+  current.items.forEach(it => {
+    if (!(it.term || it.explain || it.meaning) || hiddenTypes.has(it.type)) return;
+    const i = n ? lineOfItem(it, texts) : -1, g = i >= 0 ? groups[i] : rest;
+    (GRAMMAR_TYPES.has(it.type) ? g.gram : g.words).push(it);
+  });
+  if (rest.words.length || rest.gram.length) groups.push(rest); // どの文にも当てはまらない項目は最後の「ほか」へ
+  return groups;
 }
 function itemHTML(it, p) {
   const meta = [it.pos && "品詞 " + it.pos, it.conjType && "活用 " + it.conjType, it.conjForm].filter(Boolean).join(" ｜ ");
   const focus = focusTerm && focusTerm === it.term ? " focus" : "";
   const ai = it.ai && p === "b" ? '<span class="tag ai">AI下書き</span>' : "";
   return `<div class="item${focus}" data-t="${esc(it.type)}" data-term="${esc(it.term)}"><div class="item-head"><span class="term">${esc(it.term) || "（未入力）"}</span><span class="tag">${esc(it.type)}</span>${ai}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ""}${it.meaning ? `<div class="meaning">意味：${esc(it.meaning)}</div>` : ""}${it.explain ? `<div class="explain">${esc(it.explain)}</div>` : ""}</div>`;
+}
+function groupHTML(g, gi, p, cls, hits) {
+  const act = activeLine === gi ? " active" : "";
+  let h = `<div class="grp" data-g="${gi}"><span class="gno">${g.orig ? gi + 1 : "ほか"}</span>`;
+  if (g.orig) {
+    let idx = g.s.s; h += `<div class="gcol g-orig original-text${act}" data-g="${gi}">`;
+    for (const ch of g.s.t) {
+      const c = [cls[idx] ? "m" + cls[idx] : "", hits.has(idx) ? "hit" : ""].filter(Boolean).join(" ");
+      h += `<span class="ch${c ? " " + c : ""}" data-i="${idx}">${esc(ch)}</span>`; idx += ch.length;
+    }
+    h += "</div>";
+  }
+  if (g.tr) h += `<div class="gcol g-tr${act}" data-g="${gi}">${esc(g.tr)}</div>`;
+  if (g.words.length) h += `<div class="gcol g-words items">${g.words.map(x => itemHTML(x, p)).join("")}</div>`;
+  if (g.gram.length) h += `<div class="gcol g-gram items">${g.gram.map(x => itemHTML(x, p)).join("")}</div>`;
+  return h + "</div>";
 }
 function renderChips() {
   const counts = new Map();
@@ -181,25 +203,10 @@ function renderChips() {
   if (hiddenTypes.size) html += '<button class="chip all" data-chip="*">すべて表示</button>';
   $("chips-b").innerHTML = html; $("chips-p").innerHTML = html;
 }
-function renderItemPanels(p) {
-  const vis = current.items.filter(x => (x.term || x.explain || x.meaning) && !hiddenTypes.has(x.type));
-  const words = vis.filter(x => !GRAMMAR_TYPES.has(x.type)), gram = vis.filter(x => GRAMMAR_TYPES.has(x.type));
-  $(p + "-words").innerHTML = words.map(x => itemHTML(x, p)).join("") || '<p class="empty">語句は未登録</p>';
-  $(p + "-gram").innerHTML = gram.map(x => itemHTML(x, p)).join("") || '<p class="empty">文法事項は未登録</p>';
-}
-function paneVisible(p, i) {
-  if (p === "p") return presShow[i];
-  const cb = document.querySelector(`.show-pane[data-pane="${PANES[i]}"]`);
-  return cb.checked && (!staged || i < revealStep);
-}
-function applyVisibility(p) {
-  const ids = ["orig", "tr", "words", "gram"];
-  ids.forEach((k, i) => { $(p + "-" + k + "-wrap").hidden = !paneVisible(p, i); });
-}
 
-/* ================= ステージ（固定サイズ→拡縮）と自動拡大 ================= */
+/* ---------- ステージ（固定サイズ→拡縮）・文字サイズの自動最大化・ページ分割 ---------- */
 function layoutStage(p) {
-  const wrap = $("stage-" + p), host = $(p === "b" ? "board" : "pres-board");
+  const wrap = $("stage-" + p), host = hostOf(p);
   let s;
   if (p === "b") s = wrap.parentElement.clientWidth / STAGE_W;
   else { const a = $("stage-area"); s = Math.min(a.clientWidth / STAGE_W, a.clientHeight / STAGE_H); }
@@ -207,48 +214,104 @@ function layoutStage(p) {
   stageScale[p] = s; wrap.style.width = STAGE_W * s + "px"; wrap.style.height = STAGE_H * s + "px"; host.style.transform = `scale(${s})`;
   return true;
 }
-function setSizes(host, o, t, w) { host.style.setProperty("--o-px", o + "px"); host.style.setProperty("--t-px", t + "px"); host.style.setProperty("--w-px", w + "px"); }
+const sizeSet = s => ({ o: s, t: Math.max(26, s * 0.75), w: Math.max(26, s * 0.5) });
+const manualSizes = () => { const v = current.view; return { o: v.oPx || Math.round(lastFit.o), t: v.tPx || Math.round(lastFit.t), w: v.wPx || Math.round(lastFit.w) }; };
+function setSizes(host, z) { host.style.setProperty("--o-px", z.o + "px"); host.style.setProperty("--t-px", z.t + "px"); host.style.setProperty("--w-px", z.w + "px"); }
 function fitMax(lo, hi, ok) { if (ok(hi)) return hi; if (!ok(lo)) return lo; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ok(m)) lo = m; else hi = m; } return lo; }
 function applyView(p) {
-  const host = $(p === "b" ? "board" : "pres-board"), v = current.view;
-  host.style.setProperty("--lh", v.lh); host.style.setProperty("--ls", v.ls + "em");
-  $(p + "-head").hidden = !v.header; host.classList.toggle("fit", v.auto);
+  const host = hostOf(p), v = current.view;
+  host.style.setProperty("--lh", v.lh); host.style.setProperty("--ls", v.ls + "em"); host.classList.toggle("fit", v.auto);
+}
+function computePages(p, G) {
+  const per = current.view.per;
+  if (!G) return [];
+  if (per === "all") return [[0, G]];
+  if (per !== "auto") { const k = Math.max(1, parseInt(per, 10) || 1), out = []; for (let a = 0; a < G; a += k) out.push([a, Math.min(G, a + k)]); return out; }
+  // 自動：本文が最小サイズ以上で読める範囲で、1画面にできるだけ多くの文を入れる
+  const wrap = $(p + "-groups"), gs = [...wrap.querySelectorAll(".grp")];
+  setSizes(hostOf(p), current.view.auto ? sizeSet(MIN_O) : manualSizes());
+  gs.forEach(g => g.classList.remove("off"));
+  const cap = wrap.clientWidth, gap = parseFloat(getComputedStyle(wrap).columnGap) || 0, w = gs.map(g => g.offsetWidth), out = [];
+  let a = 0;
+  while (a < G) { let b = a + 1, used = w[a]; while (b < G && used + gap + w[b] <= cap) { used += gap + w[b]; b++; } out.push([a, b]); a = b; }
+  return out;
 }
 function fitStage(p) {
-  const host = $(p === "b" ? "board" : "pres-board"), v = current.view, cols = $(p + "-cols");
-  const panes = [...cols.children].filter(e => !e.hidden);
-  if (!panes.length) return;
-  const oVis = !$(p + "-orig-wrap").hidden;
-  if (!v.auto) { setSizes(host, v.oPx || 64, v.lPx || 38, (v.lPx || 38) * 0.92); return; }
-  const set = s => { const t = oVis ? s * 0.58 : s; setSizes(host, s, t, t * 0.92); };
-  const ok = () => {
-    const gap = parseFloat(getComputedStyle(cols).columnGap) || 0;
-    const used = panes.reduce((a, e) => a + e.offsetWidth, 0) + gap * (panes.length - 1);
-    return used <= cols.clientWidth + 1 && panes.every(e => e.scrollHeight <= e.clientHeight + 1);
-  };
-  const s = fitMax(18, 300, x => { set(x); return ok(); });
-  set(s); lastFit = { o: s, t: oVis ? s * 0.58 : s };
+  const host = hostOf(p), v = current.view, wrap = $(p + "-groups");
+  const vis = [...wrap.querySelectorAll(".grp")].filter(g => !g.classList.contains("off"));
+  wrap.classList.remove("scroll");
+  if (!vis.length) return;
+  if (!v.auto) { setSizes(host, manualSizes()); wrap.classList.add("scroll"); return; }
+  const gap = parseFloat(getComputedStyle(wrap).columnGap) || 0, cap = wrap.clientWidth;
+  const ok = () => vis.reduce((a, g) => a + g.offsetWidth, 0) + gap * (vis.length - 1) <= cap + 1;
+  const s = fitMax(18, 320, x => { setSizes(host, sizeSet(x)); return ok(); });
+  const z = sizeSet(s); setSizes(host, z); lastFit = z;
+  if (!ok()) wrap.classList.add("scroll");
 }
+function pageOfStep(st, step) {
+  if (!st.pages.length) return 0;
+  const idx = clamp(step - 1, 0, st.G - 1), i = st.pages.findIndex(([a, b]) => idx >= a && idx < b);
+  return i < 0 ? 0 : i;
+}
+function showPage(p) {
+  const st = S[p], v = current.view, [a, b] = st.pages[st.page] || [0, 0];
+  [...$(p + "-groups").querySelectorAll(".grp")].forEach((g, i) => g.classList.toggle("off", i < a || i >= b));
+  const bits = [0, 1, 2, 3].map(i => (paneOn(p, i) ? 1 : 0)).join("");
+  st.key = `g${a}-${b}_${bits}_${v.brk ? 1 : 0}_${v.auto ? "a" : `m${v.oPx}x${v.tPx}x${v.wPx}`}_${v.lh}_${v.ls}`;
+  fitStage(p);
+}
+function applyStep(p) {
+  const st = S[p]; if (!current) return;
+  st.step = clamp(st.step == null ? 0 : st.step, 0, st.G);
+  const pg = pageOfStep(st, st.step), changed = pg !== st.page; st.page = pg;
+  [...$(p + "-groups").querySelectorAll(".grp")].forEach((g, i) => g.classList.toggle("pend", i >= st.step)); // 解説は step 番目までを表示（場所は確保したまま）
+  if (changed) showPage(p);
+  updateCount(p); drawFull(p);
+}
+function updateCount(p) {
+  const st = S[p], el = $(p === "b" ? "b-count" : "pres-count"); if (!el) return;
+  const pg = st.pages.length > 1 ? ` ・ 画面 ${st.page + 1}/${st.pages.length}` : "";
+  el.textContent = st.G ? `解説 ${Math.min(st.step, st.G)} / ${st.G}${pg}` : "";
+}
+function stepBy(p, d) {
+  const st = S[p]; if (!current) return;
+  if (st.step == null) st.step = st.pages[0] ? st.pages[0][1] : 0;
+  const before = st.step; st.step = clamp(st.step + d, 0, st.G);
+  if (st.step === before && d > 0) toast("最後の文です");
+  applyStep(p);
+}
+function revealPage(p) { const st = S[p]; if (!current) return; const [, b] = st.pages[Math.max(0, st.page)] || [0, 0]; st.step = b; applyStep(p); }
 function renderSurface(p) {
   if (!current) return;
-  $(p + "-class").textContent = current.className || "高校古典"; $(p + "-session").textContent = current.session || "";
-  $(p + "-title").textContent = current.title || "古典授業";
-  $(p + "-source").textContent = current.source ? "出典：" + current.source : ""; $(p + "-source").hidden = !current.source;
-  $(p + "-original").innerHTML = originalHTML(); $(p + "-translation").innerHTML = translationHTML();
-  renderItemPanels(p); applyVisibility(p); applyView(p);
-  if (layoutStage(p)) fitStage(p);
-  drawFull(p);
-  if (p === "p") updatePresCount();
+  const st = S[p], wrap = $(p + "-groups"), groups = buildGroups(); st.G = groups.length;
+  const text = getOrig(), cls = new Array(text.length).fill(0);
+  current.marks.forEach(m => { for (let i = Math.max(0, m.s); i < Math.min(text.length, m.e); i++) cls[i] = m.c; });
+  const hits = hitSet(text, focusTerm);
+  wrap.innerHTML = groups.length ? groups.map((g, i) => groupHTML(g, i, p, cls, hits)).join("") : '<p class="empty">本文が未入力です（教材編集で入力してください）</p>';
+  ["orig", "tr", "words", "gram"].forEach((k, i) => wrap.classList.toggle("hide-" + k, !paneOn(p, i)));
+  applyView(p);
+  if (!layoutStage(p)) return;
+  st.pages = computePages(p, st.G);
+  if (st.step == null) st.step = st.pages.length ? st.pages[0][1] : 0; // 板書プレビューは最初の画面の解説をすべて表示
+  st.page = -1; applyStep(p);
 }
-function renderOriginalOnly() { ["b", "p"].forEach(p => { $(p + "-original").innerHTML = originalHTML(); $(p + "-translation").innerHTML = translationHTML(); }); }
+function renderOriginalOnly() { if ($("tab-board").classList.contains("active")) renderSurface("b"); if (!$("presentation").hidden) renderSurface("p"); }
+function setActiveLine(n) { document.querySelectorAll(".g-orig,.g-tr").forEach(el => el.classList.toggle("active", +el.dataset.g === n)); }
+function updateLinesNote() {
+  const el = $("lines-note"); if (!el || !current) return;
+  const n = lineList(getOrig(), current.view.brk).length, m = lineList(str(current.translation).replace(/\r/g, ""), current.view.brk).length, bad = n !== m && !!(n || m);
+  el.textContent = `本文 ${n}文 ／ 現代語訳 ${m}文` + (bad ? "（数が違います。同じ数にすると、一文ずつ隣に表示されます）" : "");
+  el.classList.toggle("warn", bad);
+}
 function syncViewUI() {
   if (!current) return; const v = current.view;
   document.querySelectorAll(".auto-fit").forEach(c => { c.checked = v.auto; });
-  document.querySelectorAll(".hdr-toggle").forEach(c => { c.checked = v.header; });
   document.querySelectorAll(".brk-toggle").forEach(c => { c.checked = v.brk; });
-  $("v-opx").value = v.oPx || Math.round(lastFit.o); $("v-lpx").value = v.lPx || Math.round(lastFit.t);
+  document.querySelectorAll(".per-select").forEach(c => { c.value = v.per; });
+  $("v-opx").value = v.oPx || Math.round(lastFit.o); $("v-tpx").value = v.tPx || Math.round(lastFit.t); $("v-wpx").value = v.wPx || Math.round(lastFit.w);
   $("v-lh").value = v.lh; $("v-ls").value = v.ls;
-  ["v-opx", "v-lpx"].forEach(id => { $(id).disabled = v.auto; $(id).parentElement.style.opacity = v.auto ? .45 : 1; });
+  ["v-opx", "v-tpx", "v-wpx"].forEach(id => { $(id).disabled = v.auto; $(id).parentElement.style.opacity = v.auto ? .45 : 1; });
+  syncPresPaneBtns(); updateLinesNote();
 }
 function renderAll() {
   renderQueued = false;
@@ -268,8 +331,11 @@ function scheduleRender() { if (!renderQueued) { renderQueued = true; requestAni
 function renderList() {
   $("lesson-list").innerHTML = lessons.map(x => `<button class="lesson-entry ${current && x.id === current.id ? "selected" : ""}" data-id="${esc(x.id)}"><strong>${esc(x.title || "名称未設定")}</strong><small>${esc([x.className, x.session].filter(Boolean).join(" ・ ") || "授業教材")}</small></button>`).join("");
 }
+let lastN = -1;
 const typeOptions = t => (TYPES.includes(t) ? TYPES : [...TYPES, t]).map(o => `<option${o === t ? " selected" : ""}>${esc(o)}</option>`).join("");
 function renderItemsEditor() {
+  const N = lineList(getOrig(), current.view.brk).length; lastN = N;
+  const lineOpts = cur => { const c = String(cur || ""); let o = `<option value="">自動</option>`; const mx = Math.max(N, parseInt(c, 10) || 0); for (let k = 1; k <= mx; k++) o += `<option value="${k}"${c === String(k) ? " selected" : ""}>${k}文目</option>`; return o; };
   $("items-editor").innerHTML = current.items.map((it, i) => `
 <div class="item-card${it.ai ? " ai" : ""}" data-index="${i}" data-t="${esc(it.type)}">
  ${it.ai ? '<div class="ai-note">✨ AIの下書きです。内容を確認・修正してください。<button class="btn small" data-op="ok">確認済み</button></div>' : ""}
@@ -280,6 +346,7 @@ function renderItemsEditor() {
   <label>品詞<input data-field="pos" list="dl-pos" value="${esc(it.pos)}" placeholder="例：助詞"></label>
   <label>活用の種類<input data-field="conjType" list="dl-conj" value="${esc(it.conjType)}" placeholder="例：四段"></label>
   <label>活用形<input data-field="conjForm" list="dl-form" value="${esc(it.conjForm)}" placeholder="例：連体形"></label>
+  <label>表示する文<select data-field="line">${lineOpts(it.line)}</select></label>
  </div>
  <div class="ic-grid2">
   <label>意味<input data-field="meaning" value="${esc(it.meaning)}" placeholder="例：強意"></label>
@@ -304,10 +371,10 @@ function readForm() {
     current.items = rows.map((r, i) => { const o = { ...current.items[i] }; r.querySelectorAll("[data-field]").forEach(f => { o[f.dataset.field] = f.value; }); return o; });
   }
 }
-function onEdit() { readForm(); markDirty(); scheduleRender(); clearTimeout(onEdit.t); onEdit.t = setTimeout(renderList, 250); }
+function onEdit() { readForm(); markDirty(); scheduleRender(); updateLinesNote(); if (lineList(getOrig(), current.view.brk).length !== lastN && !$("items-editor").contains(document.activeElement)) renderItemsEditor(); clearTimeout(onEdit.t); onEdit.t = setTimeout(renderList, 250); }
 function selectLesson(id) {
   const x = lessons.find(l => l.id === id); if (!x) return;
-  current = x; focusTerm = ""; activeLine = -1; lastSel = null; hiddenTypes = new Set();
+  current = x; focusTerm = ""; activeLine = -1; lastSel = null; hiddenTypes = new Set(); S.b.step = null; S.p.step = 0; S.b.page = S.p.page = -1;
   fill(); renderList(); renderAll(); syncTools();
 }
 const blank = () => normLesson({ id: uid(), title: "新しい授業", updatedAt: Date.now() });
@@ -365,9 +432,10 @@ ${lines.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 
 【出力するJSONの形式】
 {"translation":["1行目の現代語訳","2行目の現代語訳", ...],
- "items":[{"type":"古語|助動詞|助詞|敬語|係り結び|接続|表現|文法|その他","term":"本文中の表記","pos":"品詞","conjType":"活用の種類（例：ラ変型、四段、ク活用。活用しない語は空）","conjForm":"本文中での活用形（例：連体形。活用しない語は空）","meaning":"意味（助動詞は本文中での意味）","explain":"文法上の説明（接続・識別・係り結び・敬語の種類など。1〜2文）"}]}
+ "items":[{"type":"古語|助動詞|助詞|敬語|係り結び|接続|表現|文法|その他","line":"その語句が出てくる本文の行番号（数字のみ）","term":"本文中の表記","pos":"品詞","conjType":"活用の種類（例：ラ変型、四段、ク活用。活用しない語は空）","conjForm":"本文中での活用形（例：連体形。活用しない語は空）","meaning":"意味（助動詞は本文中での意味）","explain":"文法上の説明（接続・識別・係り結び・敬語の種類など。1〜2文）"}]}
 
 【条件】
+- 各itemには、その語句が出てくる行の番号をlineに必ず入れる。
 - translationは本文と同じ行数（${lines.length}行）。各行を自然な現代語訳にする。
 - itemsは本文に出てくる順に、重要なものを最大25件。助動詞・助詞（係助詞など）・敬語・係り結び・重要古語・識別に注意すべき語を優先する。
 - すでに登録済みの語句は重複させない：${existing.length ? existing.join("、") : "（なし）"}
@@ -390,7 +458,7 @@ async function aiFill() {
   const cfg = rd(AI_KEY, null);
   if (!cfg || !cfg.key) { toast("先に「使い方・同期設定」でAPIキーを登録してください"); document.querySelector('[data-tab="guide"]').click(); return; }
   readForm();
-  const lines = lineList(getOrig(), true).map(l => l.t.trim());
+  const lines = lineList(getOrig(), current.view.brk).map(l => l.t.trim());
   if (!lines.length) { toast("本文を入力してください"); return; }
   const btn = $("ai-fill"), st = $("ai-status"); btn.disabled = true; st.textContent = "AIが解析中…（10〜40秒）";
   const target = current;
@@ -405,7 +473,7 @@ async function aiFill() {
     const data = parseJSONLoose((j.content || []).map(b => b.text || "").join(""));
     let added = 0;
     (Array.isArray(data.items) ? data.items : []).slice(0, 30).forEach(it => {
-      const n = normItem({ ...it, type: TYPES.includes(it && it.type) ? it.type : "その他", ai: true });
+      const n = normItem({ ...it, type: TYPES.includes(it && it.type) ? it.type : "その他", ai: true, line: (Number.isInteger(+it.line) && +it.line >= 1 && +it.line <= lines.length) ? String(+it.line) : "" });
       if (!n.term || target.items.some(x => x.term === n.term && x.type === n.type)) return;
       target.items.push(n); added++;
     });
@@ -459,42 +527,39 @@ document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
 });
 $("open-board").onclick = () => document.querySelector('[data-tab="board"]').click();
 document.querySelectorAll(".show-pane").forEach(cb => cb.onchange = () => renderSurface("b"));
-$("reveal-mode").onclick = () => { staged = true; revealStep = 0; renderSurface("b"); toast("段階表示を開始しました。「次を表示」で順に提示します"); };
-$("reveal-next").onclick = () => { if (!staged) { staged = true; revealStep = 0; } revealStep = Math.min(4, revealStep + 1); renderSurface("b"); };
-$("reveal-all").onclick = () => { staged = false; revealStep = 4; renderSurface("b"); };
-$("print-board").onclick = () => { renderSurface("b"); window.print(); };
+$("reveal-mode").onclick = () => stepBy("b", -1);
+$("reveal-next").onclick = () => stepBy("b", 1);
+$("reveal-all").onclick = () => revealPage("b");
+$("reveal-reset").onclick = () => { S.b.step = 0; applyStep("b"); };
+$("print-board").onclick = () => { revealPage("b"); window.print(); };
 
 function setAuto(on) {
   if (!current) return; const v = current.view;
-  if (!on) { v.oPx = Math.round(lastFit.o); v.lPx = Math.round(lastFit.t); }
+  if (!on) { v.oPx = Math.round(lastFit.o); v.tPx = Math.round(lastFit.t); v.wPx = Math.round(lastFit.w); }
   v.auto = on; markDirty(); renderAll();
 }
 function adjust(kind, dir) {
-  if (!current) return; const v = current.view;
-  if (v.auto) setAuto(false);
-  if (kind === "o") v.oPx = clamp(Math.round((v.oPx || 64) * (dir > 0 ? 1.12 : 0.89)), 24, 320);
-  else v.lPx = clamp(Math.round((v.lPx || 38) * (dir > 0 ? 1.12 : 0.89)), 14, 140);
+  if (!current) return; const v = current.view, f = dir > 0 ? 1.12 : 0.89;
+  if (v.auto) { v.oPx = Math.round(lastFit.o); v.tPx = Math.round(lastFit.t); v.wPx = Math.round(lastFit.w); v.auto = false; }
+  if (kind === "o") v.oPx = clamp(Math.round((v.oPx || 64) * f), 24, 340);
+  else { v.tPx = clamp(Math.round((v.tPx || 48) * f), 16, 260); v.wPx = clamp(Math.round((v.wPx || 30) * f), 14, 160); }
   markDirty(); renderAll();
 }
 document.addEventListener("change", e => {
   const c = e.target; if (!current || !c.classList) return;
   if (c.classList.contains("auto-fit")) setAuto(c.checked);
-  else if (c.classList.contains("hdr-toggle")) { current.view.header = c.checked; markDirty(); renderAll(); }
-  else if (c.classList.contains("brk-toggle")) { current.view.brk = c.checked; activeLine = -1; markDirty(); renderAll(); }
+  else if (c.classList.contains("brk-toggle")) { current.view.brk = c.checked; activeLine = -1; S.b.step = null; S.p.step = 0; markDirty(); renderAll(); }
+  else if (c.classList.contains("per-select")) { current.view.per = c.value; S.b.step = null; markDirty(); renderAll(); }
 });
-[["v-opx", "oPx"], ["v-lpx", "lPx"], ["v-lh", "lh"], ["v-ls", "ls"]].forEach(([id, k]) => $(id).addEventListener("input", e => { if (!current) return; current.view[k] = +e.target.value; markDirty(); scheduleRender(); }));
+[["v-opx", "oPx"], ["v-tpx", "tPx"], ["v-wpx", "wPx"], ["v-lh", "lh"], ["v-ls", "ls"]].forEach(([id, k]) => $(id).addEventListener("input", e => { if (!current) return; current.view[k] = +e.target.value; markDirty(); scheduleRender(); }));
 
-// 本文↔現代語訳の対応、語句→本文ハイライト、種類の絞り込み
+// 本文↔現代語訳の対応表示、語句→本文ハイライト、種類の絞り込み
 document.addEventListener("click", e => {
   const sel = window.getSelection && window.getSelection().toString();
-  const ln = e.target.closest(".vline");
-  if (ln && !sel) {
-    const n = +ln.dataset.line; activeLine = activeLine === n ? -1 : n; renderOriginalOnly();
-    if (activeLine >= 0) document.querySelectorAll(`.vline[data-line="${n}"]`).forEach(el => { if (el.parentElement !== ln.parentElement) el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); });
-    return;
-  }
+  const col = e.target.closest(".g-orig, .g-tr");
+  if (col && !sel) { const n = +col.dataset.g; activeLine = activeLine === n ? -1 : n; setActiveLine(activeLine); return; }
   const it = e.target.closest(".item");
-  if (it && !sel) { const t = it.dataset.term; focusTerm = focusTerm === t ? "" : t; ["b", "p"].forEach(p => { renderItemPanels(p); $(p + "-original").innerHTML = originalHTML(); }); return; }
+  if (it && !sel) { const t = it.dataset.term; focusTerm = focusTerm === t ? "" : t; renderOriginalOnly(); return; }
   const ch = e.target.closest("[data-chip]");
   if (ch) { const t = ch.dataset.chip; if (t === "*") hiddenTypes.clear(); else if (hiddenTypes.has(t)) hiddenTypes.delete(t); else hiddenTypes.add(t); renderAll(); }
 });
@@ -503,9 +568,9 @@ document.addEventListener("click", e => {
 function selectionRange() {
   const sel = window.getSelection(); if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
   const r = sel.getRangeAt(0); let n = r.commonAncestorContainer; if (n.nodeType !== 1) n = n.parentElement;
-  const host = n && n.closest(".original-text"); if (!host) return null;
+  const host = n && n.closest(".groups"); if (!host) return null;
   let s = Infinity, e = -1;
-  host.querySelectorAll("[data-i]").forEach(sp => { if (r.intersectsNode(sp)) { const i = +sp.dataset.i; s = Math.min(s, i); e = Math.max(e, i + sp.textContent.length); } });
+  host.querySelectorAll(".g-orig [data-i]").forEach(sp => { if (r.intersectsNode(sp)) { const i = +sp.dataset.i; s = Math.min(s, i); e = Math.max(e, i + sp.textContent.length); } });
   return e < 0 ? null : { s, e };
 }
 document.addEventListener("selectionchange", () => { const r = selectionRange(); if (r) lastSel = r; });
@@ -527,17 +592,12 @@ document.addEventListener("pointerdown", e => { if (e.target.closest("[data-mark
 document.addEventListener("click", e => { const b = e.target.closest("[data-mark]"); if (b) applyMark(b.dataset.mark); });
 
 /* ================= 投影モード ================= */
-function setPresStep(n) { presStep = clamp(n, 0, 4); presShow = presShow.map((_, i) => i < presStep); renderPresPanes(); }
-function renderPresPanes() { if (!current) return; renderSurface("p"); }
-function updatePresCount() {
-  const n = presShow.filter(Boolean).length;
-  $("pres-count").textContent = n === 4 ? "全表示" : `${n} / 4 表示中`;
-  document.querySelectorAll(".pres-pane").forEach(b => b.classList.toggle("on", presShow[+b.dataset.pane]));
-}
+function syncPresPaneBtns() { document.querySelectorAll(".pres-pane").forEach(b => b.classList.toggle("on", presShow[+b.dataset.pane])); }
 function openPres() {
   if (!current) return; readForm(); persist();
+  presShow = [true, true, true, true]; S.p.step = 0; S.p.page = -1;
   $("presentation").hidden = false; document.body.classList.add("projecting");
-  setBarMode(0); renderChips(); syncViewUI(); setPresStep(0); syncTools();
+  setBarMode(0); renderChips(); syncViewUI(); syncTools(); renderSurface("p");
   const el = $("presentation"), rf = el.requestFullscreen || el.webkitRequestFullscreen;
   if (rf) try { const r = rf.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {}
   setTimeout(() => { if (!$("presentation").hidden) renderSurface("p"); }, 250); // 全画面化後のサイズで再計算
@@ -554,10 +614,10 @@ function togglePresBar() { setBarMode((presBarMode + 1) % 3); }
 $("project-btn").onclick = openPres;
 $("pres-exit").onclick = exitPres;
 $("pres-bar-toggle").onclick = togglePresBar;
-$("pres-next").onclick = () => setPresStep(presStep + 1);
-$("pres-prev").onclick = () => setPresStep(presStep - 1);
-$("pres-all").onclick = () => setPresStep(4);
-document.querySelectorAll(".pres-pane").forEach(b => b.onclick = () => { const i = +b.dataset.pane; presShow[i] = !presShow[i]; renderPresPanes(); });
+$("pres-next").onclick = () => stepBy("p", 1);
+$("pres-prev").onclick = () => stepBy("p", -1);
+$("pres-all").onclick = () => revealPage("p");
+document.querySelectorAll(".pres-pane").forEach(b => b.onclick = () => { const i = +b.dataset.pane; presShow[i] = !presShow[i]; syncPresPaneBtns(); renderSurface("p"); });
 $("pres-osize-up").onclick = () => adjust("o", 1); $("pres-osize-down").onclick = () => adjust("o", -1);
 $("pres-lsize-up").onclick = () => adjust("l", 1); $("pres-lsize-down").onclick = () => adjust("l", -1);
 
@@ -568,30 +628,25 @@ document.addEventListener("keydown", e => {
   const k = e.key, ctrl = e.ctrlKey || e.metaKey;
   if (ctrl && (k === "z" || k === "Z")) { if (!$("presentation").hidden || $("tab-board").classList.contains("active")) { e.preventDefault(); undo(); } return; }
   if ($("presentation").hidden) return;
-  if (k === "ArrowRight" || k === " " || k === "PageDown") { e.preventDefault(); $("pres-next").click(); }
-  else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); $("pres-prev").click(); }
-  else if (k === "Home") setPresStep(0);
-  else if (k === "End" || k === "a" || k === "A") setPresStep(4);
+  if (k === "ArrowRight" || k === " " || k === "PageDown" || k === "Enter") { e.preventDefault(); stepBy("p", 1); }
+  else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace") { e.preventDefault(); stepBy("p", -1); }
+  else if (k === "Home") { S.p.step = 0; applyStep("p"); }
+  else if (k === "End" || k === "a" || k === "A") revealPage("p");
   else if (k === "Escape") exitPres();
   else if (k === "+" || k === "=") adjust("o", 1);
   else if (k === "-") adjust("o", -1);
-  else if (k >= "1" && k <= "4") { const i = +k - 1; presShow[i] = !presShow[i]; renderPresPanes(); }
+  else if (k >= "1" && k <= "4") { const i = +k - 1; presShow[i] = !presShow[i]; syncPresPaneBtns(); renderSurface("p"); }
   else if (k === "d" || k === "D") setDraw(!drawingEnabled);
   else if (k === "e" || k === "E") toggleEraser();
   else if (k === "t" || k === "T") togglePresBar();
   else if (k === "f" || k === "F") setAuto(!current.view.auto);
-  else if (k === "h" || k === "H") { current.view.header = !current.view.header; markDirty(); renderAll(); }
-  else if (k === "k" || k === "K") { current.view.brk = !current.view.brk; markDirty(); renderAll(); }
+  else if (k === "k" || k === "K") { current.view.brk = !current.view.brk; activeLine = -1; S.p.step = 0; markDirty(); renderAll(); }
 });
 
 /* ================= 手書き（ステージ座標・Pointer Events） ================= */
 const activeSurface = () => ($("presentation").hidden ? "b" : "p");
 const LEGACY_KEY = "a1111hb";
-function layoutKey(p) {
-  const v = current.view, flags = (v.header ? "h" : "") + (v.brk ? "b" : "");
-  if (v.auto) return "a" + PANES.map((_, i) => (paneVisible(p, i) ? 1 : 0)).join("") + flags; // 表示内容ごとにレイアウトが変わる
-  return `m${v.oPx}_${v.lPx}_${v.lh}_${v.ls}${flags}`; // 手動サイズでは表示内容を変えても本文の位置は動かない
-}
+function layoutKey(p) { return S[p].key || "none"; } // 表示している画面（文の範囲・表示内容・文字サイズ）ごとに手書きを分けて保存
 const strokeKey = s => s.k || LEGACY_KEY;
 const myDraw = () => { if (!current) return []; if (!isViewer()) return current.drawings; return vdraw[current.id] || (vdraw[current.id] = []); }; // 閲覧端末の手書きはこの端末だけに保存
 const allDraw = () => (!current ? [] : isViewer() ? current.drawings.concat(vdraw[current.id] || []) : current.drawings); // 閲覧端末では編集端末の手書きも見える

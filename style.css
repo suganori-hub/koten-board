@@ -49,6 +49,9 @@ button{cursor:pointer}
 .card-title>div{display:flex;align-items:center;gap:9px}.card-title strong{font-size:14px}
 .step{width:24px;height:24px;border-radius:7px;background:var(--green2);color:var(--green);display:grid;place-items:center;font-size:10px;font-weight:800}
 .hint{font-size:11px;color:var(--muted);font-weight:400}
+.lines-note{margin:-4px 0 10px}.lines-note.warn{color:#b3541e;font-weight:700}
+.per-select,.check select{padding:5px 8px;border:1px solid #cbd6cf;border-radius:7px;background:#fff;font-size:12px;margin-left:4px}
+.presentation-bar .check select{background:#254438;color:#fff;border-color:var(--bdline)}
 .full-card{grid-column:1/-1}
 .button-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}.button-row.end{justify-content:flex-end}
 .quick-add{margin:0 0 12px}.ai-row{margin:0 0 6px}
@@ -64,7 +67,7 @@ button{cursor:pointer}
 .ic-head{display:grid;grid-template-columns:130px minmax(0,1fr) auto;gap:8px;align-items:center}
 .ic-head select,.ic-head input{margin-top:0!important}
 .ic-ops{display:flex;gap:5px}
-.ic-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ic-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .ic-grid2{display:grid;grid-template-columns:1fr 2fr;gap:8px}
 .item-card label{margin:8px 0 0!important;font-size:11px!important}
 
@@ -93,46 +96,44 @@ input[type=color]{width:34px;height:28px;padding:1px;border:0;background:transpa
 /* ======== ステージ：1600x900固定→拡縮（端末・向き・全画面で配置が変わらない） ======== */
 .stage-wrap{position:relative;overflow:hidden;margin:0 auto;border-radius:12px;background:var(--bd);max-width:100%}
 .stage-wrap>.board{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0}
-.board{background:var(--bd);color:#f5f1df;padding:28px 36px 30px;font-family:"Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;position:relative;isolation:isolate;display:flex;flex-direction:column;overflow:hidden;
- --o-px:64px;--t-px:38px;--w-px:34px;--lh:1.8;--ls:.06em}
-.board-head{display:flex;align-items:baseline;gap:20px;flex-wrap:nowrap;border-bottom:1px solid var(--bdline);padding-bottom:10px;margin-bottom:12px;font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif}
-.board-head h2{font-size:44px;margin:0;line-height:1.2;font-family:"Yu Mincho","Hiragino Mincho ProN",serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.board-source{font-size:22px;color:#b8cbbd;white-space:nowrap}
-.board-meta{margin-left:auto;display:flex;gap:18px;color:#b8cbbd;font-size:20px;white-space:nowrap}
-.yellow,.gold{color:var(--gold)}.cyan{color:var(--cyan)}.pink{color:var(--pink)}
+.board{background:var(--bd);color:#f5f1df;padding:20px 26px 22px;font-family:"Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;position:relative;isolation:isolate;overflow:hidden;
+ --o-px:64px;--t-px:48px;--w-px:30px;--lh:1.8;--ls:.06em;--gh:858px}
 
-/* 縦書きパネルを右から左へ並べる（右＝本文、左へ 現代語訳→語句→文法） */
-.board-cols{flex:1;min-height:0;display:flex;flex-direction:row-reverse;justify-content:flex-start;align-items:stretch;gap:22px;overflow:hidden}
-.board:not(.fit) .board-cols{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.pane{writing-mode:vertical-rl;text-orientation:mixed;flex:none;height:100%;display:block;background:#ffffff0c;border:1px solid #ffffff1a;border-radius:12px;padding:16px 18px;overflow:hidden}
-.pane-orig{background:var(--bd2);font-size:var(--o-px)}
-.pane-tr{font-size:var(--t-px)}
-.pane-words,.pane-gram{font-size:var(--w-px)}
-.pane h3{margin:0 0 0 .5em;margin-inline-start:0;margin-block-end:.55em;padding:0 0 0 .35em;border-left:1px solid var(--bdline);font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;font-size:max(20px,.34em);letter-spacing:.2em;font-weight:700;white-space:nowrap}
-.vtext{display:block;line-height:var(--lh);letter-spacing:var(--ls);text-combine-upright:digits 2;line-break:strict}
-.vtext p{margin:0}
-.empty{color:#b8cbbd;font-size:.5em}
+/* 本文の一文ごとのまとまり（グループ）を、1文目が右端になるよう右から左へ並べる */
+.groups{height:var(--gh);display:flex;flex-direction:row-reverse;justify-content:flex-start;align-items:stretch;gap:26px;overflow:hidden}
+.groups.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.grp{position:relative;flex:none;height:100%;box-sizing:border-box;padding:56px 14px 12px;display:flex;flex-direction:row-reverse;align-items:flex-start;gap:16px;border-radius:16px;background:#ffffff09;border:1px solid #ffffff17}
+.grp.off{display:none}
+.gno{position:absolute;top:10px;right:14px;min-width:38px;height:38px;padding:0 10px;border-radius:19px;background:var(--gold);color:#18352c;font:800 22px/38px system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;text-align:center}
+.empty{color:#b8cbbd;font-size:28px;padding:20px}
 
-/* 行（本文・現代語訳）。番号バッジは各行の先頭（上端）に置き、対応関係を示す */
-.vline{margin-block-end:.1em;border-radius:6px;cursor:pointer;padding-block-start:.05em}
-.vline.active{background:#d8b96c26;outline:1px solid #d8b96c77}
-.lno{display:block;writing-mode:horizontal-tb;width:1.35em;height:1.35em;border-radius:50%;background:var(--gold);color:#18352c;font:700 .38em/1.35em system-ui,sans-serif;text-align:center;margin:0 auto .25em;letter-spacing:0}
-.vline.tr .lno{background:var(--cyan)}
+/* 各列は縦書き。本文→現代語訳→語句→文法 の順に、右から左へ隣り合う */
+.gcol{writing-mode:vertical-rl;text-orientation:mixed;flex:none;height:100%;display:block;line-height:var(--lh);letter-spacing:var(--ls);line-break:strict;text-combine-upright:digits 2;border-radius:10px}
+.g-orig{font-size:var(--o-px);color:#fbf6e2;background:var(--bd2);padding:6px 10px}
+.g-tr{font-size:var(--t-px);color:#c4edf3;padding:6px 6px}
+.g-words,.g-gram{font-size:var(--w-px);line-height:1.6;letter-spacing:.02em;display:flex;flex-flow:row wrap;align-content:flex-start;align-items:flex-start;gap:.3em .4em}
+.g-orig.active,.g-tr.active{outline:2px solid #d8b96ccc;background:#d8b96c24}
+.g-orig{cursor:pointer}.g-tr{cursor:pointer}
+.groups.hide-orig .g-orig,.groups.hide-tr .g-tr,.groups.hide-words .g-words,.groups.hide-gram .g-gram{display:none}
+.grp .g-tr,.grp .g-words,.grp .g-gram{transition:opacity .22s}
+.grp.pend .g-tr,.grp.pend .g-words,.grp.pend .g-gram{opacity:0;visibility:hidden} /* まだ解説していない文：場所は確保したまま隠す */
+
 .ch{border-radius:.12em}
 .ch.m1{background:#f1d47766;color:#fff}.ch.m2{background:#ff7b7b73;color:#fff}
 .ch.hit{outline:2px solid var(--cyan);background:#8ed9e540}
 
 /* 語句・文法カード（縦書き） */
-.items .item{display:block;height:fit-content;max-height:100%;margin-block-end:.35em;padding:.1em .35em;border-right:6px solid #b8c4bd;background:#ffffff0d;border-radius:8px;line-height:1.5;cursor:pointer}
+.items .item{display:block;flex:none;height:fit-content;max-height:100%;margin:0;padding:.1em .35em;border-right:6px solid #b8c4bd;background:#ffffff0f;border-radius:8px;line-height:1.5;cursor:pointer}
 .items .item.focus{outline:2px solid var(--cyan);background:#8ed9e51a}
 .items .item>div{margin-block-end:.12em}
 .item-head{white-space:nowrap}
-.item .term{font-weight:700;color:var(--gold);font-size:1em}
+.item .term{font-weight:700;color:var(--gold);font-size:1.06em}
 .item .tag{font-family:system-ui,sans-serif;font-size:.42em;padding:.15em .5em;border-radius:999px;background:#ffffff1f;color:#f5f1df;margin-block-start:.4em;display:inline-block;writing-mode:horizontal-tb;line-height:1.3;letter-spacing:0}
 .item .tag.ai{background:#7a5cc9}
-.item .meta{font-size:.62em;color:#cfe0d5}
-.item .meaning{font-size:.74em}
-.item .explain{font-size:.7em;color:#f4f1e8}
+.item .meta{font-size:.66em;color:#cfe0d5}
+.item .meaning{font-size:.82em}
+.item .explain{font-size:.78em;color:#f4f1e8}
+.g-gram .term{color:var(--pink)}
 .item[data-t="古語"]{border-right-color:#d8b96c}
 .item[data-t="文法"],.item[data-t="助動詞"],.item[data-t="助動詞候補"]{border-right-color:#ff9a9a}
 .item[data-t="助詞"],.item[data-t="係助詞"]{border-right-color:#ffb86b}
@@ -173,6 +174,7 @@ code{background:#eef2ef;padding:1px 5px;border-radius:4px}
 /* ---- レスポンシブ ---- */
 @media(max-width:1100px){.ic-head{grid-template-columns:110px minmax(0,1fr)}.ic-ops{grid-column:1/-1}}
 @media(max-width:800px){
+ .ic-grid{grid-template-columns:1fr 1fr}
  .layout{grid-template-columns:1fr}.sidebar{border-right:0;border-bottom:1px solid var(--line);padding:10px 13px}
  .lesson-list{flex-direction:row;overflow-x:auto}.lesson-entry{min-width:145px}.side-foot{grid-template-columns:1fr 1fr}
  .main{padding:20px 13px}.editor-grid{grid-template-columns:1fr}.full-card{grid-column:auto}
@@ -191,8 +193,10 @@ code{background:#eef2ef;padding:1px 5px;border-radius:4px}
  .layout{display:block}.main{padding:0}.tab-panel{display:none!important}#tab-board{display:block!important}
  .stage-wrap{border-radius:0}
  .board{background:#fff!important;color:#111!important}
- .pane,.pane-orig{background:#fff!important;border-color:#999!important}
- .board-head,.board-source,.board-meta,.pane h3,.item .term,.item .meta,.item .meaning,.item .explain,.item .tag{color:#111!important}
+ .grp,.g-orig{background:#fff!important;border-color:#999!important}
+ .g-orig,.g-tr,.gno{color:#111!important}
+ .grp.pend .g-tr,.grp.pend .g-words,.grp.pend .g-gram{opacity:1;visibility:visible}
+ .item .term,.item .meta,.item .meaning,.item .explain,.item .tag{color:#111!important}
  .yellow,.cyan,.pink,.gold{color:#111!important}.items .item{background:#fff;border-right-color:#777}
  .ch.m1,.ch.m2,.ch.hit{color:#111}
  .draw-canvas{display:none!important}
