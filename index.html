@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#18352c">
 <meta name="description" content="高校古典の授業準備・板書・投影を支援するWebアプリ">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 <title>KOTEN BOARD｜古典授業支援</title>
 </head>
 <body>
@@ -79,7 +79,7 @@
      <div class="toolbar-group">
       <label class="check">一度に表示する文<select class="per-select"><option value="auto">自動</option><option value="1">1文</option><option value="2">2文</option><option value="3">3文</option><option value="4">4文</option><option value="all">全部</option></select></label>
       <label class="check"><input type="checkbox" class="auto-fit">自動で大きく</label><button class="btn small auto-reset" title="手動で変えた文字サイズを、自動で最大に戻します">↺ 自動サイズに戻す</button>
-      <label class="check"><input type="checkbox" class="brk-toggle">「。」で区切る</label><label class="check">配色<select class="theme-select"><option value="wb">ホワイトボード（白地・黒字）</option><option value="dark">暗い画面（スクリーン向け）</option></select></label>
+      <label class="check"><input type="checkbox" class="brk-toggle">「。」で区切る</label><label class="check">解説の出し方<select class="reveal-select"><option value="step">一文ずつ（次へで順に）</option><option value="all">最初から全部表示</option></select></label><label class="check">配色<select class="theme-select"><option value="wb">ホワイトボード（白地・黒字）</option><option value="dark">暗い画面（スクリーン向け）</option></select></label>
       <button id="print-board" class="btn small">印刷 / PDF</button>
      </div>
     </div>
@@ -177,7 +177,7 @@
     <label class="check">一度に表示する文<select class="per-select"><option value="auto">自動</option><option value="1">1文</option><option value="2">2文</option><option value="3">3文</option><option value="4">4文</option><option value="all">全部</option></select></label>
     <label class="check"><input type="checkbox" class="auto-fit">自動で大きく</label>
     <button class="btn small auto-reset" title="手動で変えた文字サイズを、自動で最大に戻します">↺ 自動サイズに戻す</button>
-    <label class="check"><input type="checkbox" class="brk-toggle">「。」で区切る</label><label class="check">配色<select class="theme-select"><option value="wb">ホワイトボード（白地・黒字）</option><option value="dark">暗い画面（スクリーン向け）</option></select></label>
+    <label class="check"><input type="checkbox" class="brk-toggle">「。」で区切る</label><label class="check">操作欄の位置<select class="pos-select"><option value="auto">自動（横長なら左）</option><option value="left">左</option><option value="bottom">下</option></select></label><label class="check">解説の出し方<select class="reveal-select"><option value="step">一文ずつ（次へで順に）</option><option value="all">最初から全部表示</option></select></label><label class="check">配色<select class="theme-select"><option value="wb">ホワイトボード（白地・黒字）</option><option value="dark">暗い画面（スクリーン向け）</option></select></label>
     <button class="btn" id="pres-osize-down">本文 小</button><button class="btn" id="pres-osize-up">本文 大</button>
     <button class="btn" id="pres-lsize-down">解説 小</button><button class="btn" id="pres-lsize-up">解説 大</button>
     <button id="pres-fs" class="btn">⛶ 全画面にする</button>
@@ -241,6 +241,6 @@
 <datalist id="dl-conj"><option value="四段"><option value="上一段"><option value="上二段"><option value="下一段"><option value="下二段"><option value="カ変"><option value="サ変"><option value="ナ変"><option value="ラ変"><option value="ク活用"><option value="シク活用"><option value="ナリ活用"><option value="タリ活用"><option value="特殊型"><option value="形容詞型"><option value="形容動詞型"><option value="四段型"><option value="下二段型"><option value="ラ変型"><option value="無変化型"></datalist>
 <datalist id="dl-form"><option value="未然形"><option value="連用形"><option value="終止形"><option value="連体形"><option value="已然形"><option value="命令形"></datalist>
 <div id="toast" role="status" aria-live="polite"></div>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

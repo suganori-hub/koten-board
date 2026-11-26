@@ -81,6 +81,9 @@ let lessons = load(), tombs = rd(TOMB_KEY, {}), vdraw = rd(VDRAW_KEY, {}), curre
 let presShow = [true, true, true, true];
 let hiddenTypes = new Set(), focusTerm = "", activeLine = -1, lastSel = null;
 let saveTimer = 0, renderQueued = false, pendingRender = false, strokeActive = false, lastEditAt = 0;
+const REVEAL_KEY = "koten-board-reveal", POS_KEY = "koten-board-pos";
+let revealAll = (() => { try { return localStorage.getItem(REVEAL_KEY) === "all"; } catch (e) { return false; } })();
+let posPref = (() => { try { return localStorage.getItem(POS_KEY) || "auto"; } catch (e) { return "auto"; } })();
 const THEME_KEY = "koten-board-theme";
 let theme = (() => { try { return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "wb"; } catch (e) { return "wb"; } })();
 // 配色ペア：暗い画面用(d)／ホワイトボード(白地)用(w)。保存済みの手書きも、いまの配色で見える色に自動で置き換えて表示する
@@ -188,11 +191,11 @@ function buildGroups() {
   const sents = lineList(getOrig(), current.view.brk), n = sents.length, texts = sents.map(x => x.t), tr = trLinesFor(n);
   const groups = sents.map((s, i) => ({ s, orig: true, tr: tr[i], words: [], gram: [] }));
   const rest = { s: null, orig: false, tr: "", words: [], gram: [] };
-  current.items.forEach(it => {
-    if (!(it.term || it.explain || it.meaning) || hiddenTypes.has(it.type)) return;
-    const i = n ? lineOfItem(it, texts) : -1, g = i >= 0 ? groups[i] : rest;
-    (GRAMMAR_TYPES.has(it.type) ? g.gram : g.words).push(it);
-  });
+  // 本文中に見つからない語句（辞書形・解説だけの項目など）は、並び順の前後の項目と同じ文へ入れる（最後の「ほか」へ回って最後まで出ない、を防ぐ）
+  const list = current.items.filter(it => (it.term || it.explain || it.meaning) && !hiddenTypes.has(it.type));
+  const at = list.map(it => (n ? lineOfItem(it, texts) : -1));
+  if (n) at.forEach((v, k) => { if (v >= 0) return; let a = -1; for (let q = k - 1; q >= 0 && a < 0; q--) if (at[q] >= 0 && !(at[q] === -2)) a = at[q]; if (a < 0) for (let q = k + 1; q < at.length && a < 0; q++) if (at[q] >= 0) a = at[q]; at[k] = a >= 0 ? a : 0; });
+  list.forEach((it, k) => { const i = at[k], g = i >= 0 ? groups[i] : rest; (GRAMMAR_TYPES.has(it.type) ? g.gram : g.words).push(it); });
   if (rest.words.length || rest.gram.length) groups.push(rest); // どの文にも当てはまらない項目は最後の「ほか」へ
   return groups;
 }
@@ -300,6 +303,10 @@ function stepBy(p, d) {
   const st = S[p]; if (!current) return;
   if (st.fresh && d > 0 && st.pages[0] && st.pages[0][1] >= st.G) st.step = 0; // 全表示のまま「次へ」→最初の一文から解説を始める
   st.fresh = false;
+  if (revealAll && st.pages.length) { // 「最初から全部表示」：次へ／戻る＝画面（まとまり）ごとに切り替え
+    const cur = clamp(st.page < 0 ? 0 : st.page, 0, st.pages.length - 1), to = clamp(cur + d, 0, st.pages.length - 1);
+    if (to === cur && d > 0) toast("最後の画面です"); st.fresh = false; st.step = st.pages[to][1]; applyStep(p); if (to === cur) return; return;
+  }
   const before = st.step; st.step = clamp(st.step + d, 0, st.G);
   if (st.step === before && d > 0) toast("最後の文です");
   applyStep(p);
@@ -574,7 +581,7 @@ document.addEventListener("change", e => {
   const c = e.target; if (!current || !c.classList) return;
   if (c.classList.contains("auto-fit")) setAuto(c.checked);
   else if (c.classList.contains("brk-toggle")) { current.view.brk = c.checked; activeLine = -1; S.b.step = null; S.p.step = 0; markDirty(); renderAll(); }
-  else if (c.classList.contains("per-select")) { current.view.per = c.value; S.b.step = null; markDirty(); renderAll(); }
+  else if (c.classList.contains("per-select")) { current.view.per = c.value; S.b.step = null; S.p.step = revealAll ? null : 0; S.p.page = -1; markDirty(); renderAll(); }
 });
 [["v-opx", "oPx"], ["v-tpx", "tPx"], ["v-wpx", "wPx"], ["v-lh", "lh"], ["v-ls", "ls"]].forEach(([id, k]) => $(id).addEventListener("input", e => { if (!current) return; current.view[k] = +e.target.value; markDirty(); scheduleRender(); }));
 
@@ -640,7 +647,7 @@ $("pres-fs").onclick = () => { wantFull = true; goFull(); };
 function syncPresPaneBtns() { document.querySelectorAll(".pres-pane").forEach(b => b.classList.toggle("on", presShow[+b.dataset.pane])); }
 function openPres() {
   if (!current) return; readForm(); persist();
-  presShow = [true, true, true, true]; S.p.step = 0; S.p.page = -1;
+  presShow = [true, true, true, true]; S.p.step = revealAll ? null : 0; S.p.page = -1;
   $("presentation").hidden = false; document.body.classList.add("projecting"); wantFull = true; placeOverlays(); keepAwake(true);
   setBarMode(0); renderChips(); syncViewUI(); syncTools(); renderSurface("p");
   goFull(); syncFsBtn();
@@ -673,7 +680,7 @@ document.addEventListener("keydown", e => {
   if ($("presentation").hidden || !$("picker").hidden || !$("tm-panel").hidden) return;
   if (k === "ArrowRight" || k === " " || k === "PageDown" || k === "Enter") { e.preventDefault(); stepBy("p", 1); }
   else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace") { e.preventDefault(); stepBy("p", -1); }
-  else if (k === "Home") { S.p.step = 0; applyStep("p"); }
+  else if (k === "Home") { S.p.step = revealAll ? (S.p.pages[0] ? S.p.pages[0][1] : 0) : 0; if (revealAll) S.p.page = -1; applyStep("p"); }
   else if (k === "End" || k === "a" || k === "A") revealPage("p");
   else if (k === "Escape") exitPres();
   else if (k === "+" || k === "=") adjust("o", 1);
@@ -990,6 +997,22 @@ $("sync-code-apply").onclick = () => {
 const coarseMQ = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
 const setCoarse = () => document.body.classList.toggle("coarse", !!(coarseMQ && coarseMQ.matches) || navigator.maxTouchPoints > 1);
 setCoarse(); if (coarseMQ && coarseMQ.addEventListener) coarseMQ.addEventListener("change", setCoarse);
+function applyPos() {
+  const pr = $("presentation"), left = posPref === "left" || (posPref === "auto" && window.innerWidth / Math.max(1, window.innerHeight) >= 1.55 && window.innerWidth >= 900);
+  pr.classList.toggle("pos-left", left); pr.classList.toggle("pos-bottom", !left);
+  document.querySelectorAll(".pos-select").forEach(s => { s.value = posPref; });
+}
+window.addEventListener("resize", applyPos); applyPos();
+document.querySelectorAll(".reveal-select").forEach(s => { s.value = revealAll ? "all" : "step"; });
+document.addEventListener("change", e => {
+  const c = e.target; if (!c.classList) return;
+  if (c.classList.contains("pos-select")) { posPref = c.value; try { localStorage.setItem(POS_KEY, posPref); } catch (x) {} applyPos(); setTimeout(() => { layoutStage("p"); redrawAll(); }, 60); }
+  else if (c.classList.contains("reveal-select")) {
+    revealAll = c.value === "all"; try { localStorage.setItem(REVEAL_KEY, c.value); } catch (x) {}
+    document.querySelectorAll(".reveal-select").forEach(s => { s.value = c.value; });
+    S.p.step = revealAll ? null : 0; S.p.page = -1; S.b.step = null; renderAll(); toast(revealAll ? "最初から全部表示（次へ＝次の画面）" : "一文ずつ表示（次へ＝次の文の解説）");
+  }
+});
 document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("theme-select")) applyTheme(e.target.value); });
 $("pres-theme").onclick = () => { applyTheme(theme === "wb" ? "dark" : "wb"); toast(theme === "wb" ? "配色：ホワイトボード（白地・黒字）" : "配色：暗い画面"); };
 applyTheme(theme, true);
