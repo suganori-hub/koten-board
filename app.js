@@ -110,6 +110,12 @@ const penTools = () => `
 <button class="btn small" data-act="clear">全消去</button>
 <label class="check"><input type="checkbox" data-act="autopen" checked>Pencilで自動ON</label>
 <label class="check"><input type="checkbox" data-act="finger">指でも描く</label>`;
+const penLite = () => `
+<button class="btn fb" data-act="draw" data-short="1">✎ OFF</button>
+<span class="swatches">${["#ffdf55", "#ffffff", "#ff7b7b", "#7fd8ff", "#8be28f"].map(c => `<button class="swatch" data-color="${c}" style="background:${c}" aria-label="ペン色 ${c}"></button>`).join("")}</span>
+<label class="range">太さ<input type="range" data-act="width" min="1" max="14" value="3"></label>
+<button class="btn fb" data-act="eraser">消しゴム</button>
+<button class="btn fb" data-act="undo">↶ 戻す</button>`;
 const markTools = () => `
 <button class="btn small mark-y" data-mark="1">強調 黄</button>
 <button class="btn small mark-r" data-mark="2">強調 赤</button>
@@ -118,7 +124,7 @@ const markTools = () => `
 
 $("board").innerHTML = skeleton("b");
 $("pres-board").innerHTML = skeleton("p");
-document.querySelectorAll("[data-tools]").forEach(el => { el.innerHTML = el.dataset.tools === "pen" ? penTools() : markTools(); });
+document.querySelectorAll("[data-tools]").forEach(el => { el.innerHTML = el.dataset.tools === "pen" ? penTools() : el.dataset.tools === "penlite" ? penLite() : markTools(); });
 
 const hostOf = p => $(p === "b" ? "board" : "pres-board");
 const paneOn = (p, i) => (p === "p" ? presShow[i] : document.querySelector(`.show-pane[data-pane="${PANES[i]}"]`).checked);
@@ -595,30 +601,48 @@ document.addEventListener("pointerdown", e => { if (e.target.closest("[data-mark
 document.addEventListener("click", e => { const b = e.target.closest("[data-mark]"); if (b) applyMark(b.dataset.mark); });
 
 /* ================= 投影モード ================= */
+/* 全画面の維持・画面スリープ防止・オーバーレイの置き場 */
+let wantFull = false, wakeLock = null;
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsOK = () => { const el = $("presentation"); return !!(el.requestFullscreen || el.webkitRequestFullscreen); };
+function goFull() { const el = $("presentation"), rf = el.requestFullscreen || el.webkitRequestFullscreen; if (rf && !fsEl()) try { const r = rf.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+function syncFsBtn() { $("pres-fs").hidden = !!fsEl() || !fsOK(); }
+async function keepAwake(on) {
+  try { if (on) { if (navigator.wakeLock && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } else if (wakeLock) { await wakeLock.release(); wakeLock = null; } } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !$("presentation").hidden) keepAwake(true); });
+function placeOverlays() { const h = $("presentation").hidden ? document.body : $("presentation"); ["picker", "timer", "toast"].forEach(id => { if ($(id).parentElement !== h) h.appendChild($(id)); }); }
+function onFsChange() {
+  syncFsBtn();
+  if (!$("presentation").hidden && !fsEl() && wantFull && fsOK()) toast("全画面が解除されました。画面をタップすると全画面に戻ります");
+  setTimeout(() => { if (!$("presentation").hidden) renderSurface("p"); }, 200);
+}
+document.addEventListener("fullscreenchange", onFsChange); document.addEventListener("webkitfullscreenchange", onFsChange);
+// 全画面が解けても、次にタップした時点（ユーザー操作の中）で自動的に全画面へ戻す
+document.addEventListener("pointerup", () => { if (!$("presentation").hidden && wantFull && !fsEl() && fsOK()) { goFull(); setTimeout(syncFsBtn, 400); } }, true);
+$("pres-fs").onclick = () => { wantFull = true; goFull(); };
 function syncPresPaneBtns() { document.querySelectorAll(".pres-pane").forEach(b => b.classList.toggle("on", presShow[+b.dataset.pane])); }
 function openPres() {
   if (!current) return; readForm(); persist();
   presShow = [true, true, true, true]; S.p.step = 0; S.p.page = -1;
-  $("presentation").hidden = false; document.body.classList.add("projecting");
+  $("presentation").hidden = false; document.body.classList.add("projecting"); wantFull = true; placeOverlays(); keepAwake(true);
   setBarMode(0); renderChips(); syncViewUI(); syncTools(); renderSurface("p");
-  const el = $("presentation"), rf = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (rf) try { const r = rf.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+  goFull(); syncFsBtn();
   setTimeout(() => { if (!$("presentation").hidden) renderSurface("p"); }, 250); // 全画面化後のサイズで再計算
 }
 function exitPres() {
-  $("presentation").hidden = true; document.body.classList.remove("projecting");
+  wantFull = false; keepAwake(false);
+  $("presentation").hidden = true; document.body.classList.remove("projecting"); placeOverlays();
   const fe = document.fullscreenElement || document.webkitFullscreenElement;
   if (fe) { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {} }
   renderAll();
 }
-let presBarMode = 0; // 0=コンパクト(1段) 1=ペン・強調ツールも表示 2=すべて隠す（提示内容を最大に）
-function setBarMode(m) { presBarMode = m; $("pres-bar").hidden = m === 2; $("pres-foot").hidden = m === 2 && !document.body.classList.contains("coarse"); $("pres-more").hidden = m !== 1; $("pres-bar-toggle").classList.toggle("on", m !== 0); $("pres-bar-toggle").textContent = m === 0 ? "⚙ ツール" : m === 1 ? "⚙ 閉じる" : "⚙ 戻す"; }
+let presBarMode = 0; // 0=下の操作欄だけ（既定・提示内容が最大） 1=上に詳細設定も表示 2=すべて隠す（右上/左下の小さなボタンだけ）
+function setBarMode(m) { presBarMode = m; $("pres-bar").hidden = m !== 1; $("pres-foot").hidden = m === 2; $("pres-bar-toggle").classList.toggle("on", m !== 0); $("pres-bar-toggle").textContent = m === 0 ? "⚙ 設定" : m === 1 ? "⚙ 閉じる" : "⚙ 操作欄を出す"; document.body.classList.toggle("pf-hidden", m === 2); if (!$("presentation").hidden) setTimeout(() => { layoutStage("p"); redrawAll(); }, 30); }
 function togglePresBar() { setBarMode((presBarMode + 1) % 3); }
 $("project-btn").onclick = openPres;
 $("pres-exit").onclick = exitPres;
 $("pres-bar-toggle").onclick = togglePresBar;
-$("pres-next").onclick = () => stepBy("p", 1);
-$("pres-prev").onclick = () => stepBy("p", -1);
 $("pres-all").onclick = () => revealPage("p");
 document.querySelectorAll(".pres-pane").forEach(b => b.onclick = () => { const i = +b.dataset.pane; presShow[i] = !presShow[i]; syncPresPaneBtns(); renderSurface("p"); });
 $("pres-osize-up").onclick = () => adjust("o", 1); $("pres-osize-down").onclick = () => adjust("o", -1);
@@ -630,7 +654,7 @@ document.addEventListener("keydown", e => {
   if (tag === "textarea" || tag === "select") return;
   const k = e.key, ctrl = e.ctrlKey || e.metaKey;
   if (ctrl && (k === "z" || k === "Z")) { if (!$("presentation").hidden || $("tab-board").classList.contains("active")) { e.preventDefault(); undo(); } return; }
-  if ($("presentation").hidden || !$("picker").hidden) return;
+  if ($("presentation").hidden || !$("picker").hidden || !$("tm-panel").hidden) return;
   if (k === "ArrowRight" || k === " " || k === "PageDown" || k === "Enter") { e.preventDefault(); stepBy("p", 1); }
   else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace") { e.preventDefault(); stepBy("p", -1); }
   else if (k === "Home") { S.p.step = 0; applyStep("p"); }
@@ -642,6 +666,7 @@ document.addEventListener("keydown", e => {
   else if (k === "d" || k === "D") setDraw(!drawingEnabled);
   else if (k === "e" || k === "E") toggleEraser();
   else if (k === "t" || k === "T") togglePresBar();
+  else if (k === "m" || k === "M") openTimer();
   else if (k === "f" || k === "F") setAuto(!current.view.auto);
   else if (k === "k" || k === "K") { current.view.brk = !current.view.brk; activeLine = -1; S.p.step = 0; markDirty(); renderAll(); }
 });
@@ -688,7 +713,7 @@ function redrawAll() { drawFull("b"); drawFull("p"); }
 function syncTools() {
   document.body.classList.toggle("drawing", drawingEnabled);
   ["board", "pres-board"].forEach(id => $(id).classList.toggle("drawing-enabled", drawingEnabled));
-  document.querySelectorAll('[data-act="draw"]').forEach(b => { b.textContent = drawingEnabled ? "✎ 手書き：ON" : "✎ 手書き：OFF"; b.classList.toggle("on", drawingEnabled); });
+  document.querySelectorAll('[data-act="draw"]').forEach(b => { b.textContent = b.dataset.short ? (drawingEnabled ? "✎ ON" : "✎ OFF") : (drawingEnabled ? "✎ 手書き：ON" : "✎ 手書き：OFF"); b.classList.toggle("on", drawingEnabled); });
   document.querySelectorAll('[data-act="eraser"]').forEach(b => b.classList.toggle("on", eraserMode));
   document.querySelectorAll('[data-act="finger"]').forEach(b => { b.checked = fingerDraw; });
   document.querySelectorAll('[data-act="autopen"]').forEach(b => { b.checked = autoPen; });
@@ -1033,13 +1058,11 @@ function pkDraw() {
   }, 70);
 }
 function openPicker() {
-  const host = !$("presentation").hidden ? $("presentation") : document.body;
-  if ($("picker").parentElement !== host) host.appendChild($("picker"));
-  $("picker").hidden = false; pkFill();
+  placeOverlays(); $("picker").hidden = false; pkFill();
   if (pk.last && pk.last.length) pkShow(pk.last, "fin");
 }
 function closePicker() { $("picker").hidden = true; }
-$("pick-btn").onclick = openPicker; $("pres-pick").onclick = openPicker; $("pres-pick2").onclick = openPicker; $("pk-close").onclick = closePicker;
+$("pick-btn").onclick = openPicker; $("pres-pick2").onclick = openPicker; $("pk-close").onclick = closePicker;
 $("picker").addEventListener("click", e => { if (e.target === $("picker")) closePicker(); });
 $("pk-go").onclick = pkDraw;
 $("pk-reset").onclick = () => { pk.done = []; pk.last = []; savePk(); pkInfo(); $("pk-result").className = "pk-result"; $("pk-result").innerHTML = '<span class="pk-ph">履歴をリセットしました</span>'; };
@@ -1047,18 +1070,70 @@ $("pk-reset").onclick = () => { pk.done = []; pk.last = []; savePk(); pkInfo(); 
 $("pk-from").addEventListener("change", () => { readPk(); pkFill(); }); $("pk-to").addEventListener("change", () => { readPk(); pkFill(); });
 document.querySelectorAll(".pk-count").forEach(b => b.onclick = () => { pk.count = +b.dataset.n; savePk(); pkFill(); });
 document.addEventListener("keydown", e => {
+  if (!$("tm-panel").hidden) { if (e.key === "Escape") { e.stopImmediatePropagation(); closeTimer(); } return; }
   if (!$("picker").hidden) { if (e.key === "Escape") { e.stopImmediatePropagation(); closePicker(); } return; }
   if (($("presentation").hidden) || e.ctrlKey || e.metaKey) return;
   const tag = (e.target.tagName || "").toLowerCase(); if (tag === "input" || tag === "textarea" || tag === "select") return;
   if (e.key === "r" || e.key === "R") openPicker();
 }, true);
 
+
+/* ================= タイマー（最大15分） ================= */
+const TM_KEY = "koten-board-timer", TM_MAX = 900;
+const tm = Object.assign({ dur: 300, sound: true }, rd(TM_KEY, {})); tm.dur = clamp(+tm.dur || 300, 10, TM_MAX); tm.rem = tm.dur; tm.state = "idle"; // idle / run / pause / done
+let tmEnd = 0, tmIv = 0, tmAC = null;
+const saveTm = () => wr(TM_KEY, { dur: tm.dur, sound: tm.sound });
+const fmtT = s => { s = Math.max(0, Math.ceil(s - 1e-6)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+const tmRemain = () => tm.state === "run" ? Math.max(0, (tmEnd - Date.now()) / 1000) : tm.rem;
+function tmRender() {
+  const r = tmRemain(), t = fmtT(r), st = tm.state;
+  $("tm-disp").textContent = t; $("tm-pill-t").textContent = st === "done" ? "時間です" : t;
+  $("tm-pill").hidden = st === "idle";
+  const lv = st === "done" ? "done" : st === "run" && r <= 10 ? "urgent" : st === "run" && r <= 60 ? "warn" : "";
+  [$("tm-pill"), $("tm-disp")].forEach(e => { e.classList.remove("warn", "urgent", "done"); if (lv) e.classList.add(lv); e.classList.toggle("paused", st === "pause"); });
+  $("tm-go").textContent = st === "run" ? "⏸ 一時停止" : st === "pause" ? "▶ 再開" : "▶ スタート";
+  $("tm-sound").checked = tm.sound;
+  $("timer-btn").classList.toggle("on", st === "run" || st === "pause");
+}
+function tmBeep() {
+  if (!tm.sound) return;
+  try { const ac = tmAC || new (window.AudioContext || window.webkitAudioContext)(); tmAC = ac; if (ac.resume) ac.resume();
+    [0, .35, .7].forEach(d => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = 880; o.connect(g); g.connect(ac.destination); const t = ac.currentTime + d; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.5, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + .28); o.start(t); o.stop(t + .3); });
+  } catch (e) {}
+  try { if (navigator.vibrate) navigator.vibrate([250, 120, 250, 120, 250]); } catch (e) {}
+}
+function tmTick() {
+  if (tm.state === "run" && tmEnd - Date.now() <= 0) { tm.state = "done"; tm.rem = 0; clearInterval(tmIv); tmIv = 0; tmBeep(); toast("⏱ 時間です"); openTimer(); }
+  tmRender();
+}
+function tmSet(s) { clearInterval(tmIv); tmIv = 0; tm.dur = clamp(s, 10, TM_MAX); tm.rem = tm.dur; tm.state = "idle"; saveTm(); tmRender(); }
+function tmAdd(s) {
+  if (tm.state === "run") { const nr = clamp(tmRemain() + s, 0, TM_MAX); tmEnd = Date.now() + nr * 1000; tmTick(); return; }
+  if (tm.state === "done") { tmSet(tm.dur + s); return; }
+  tm.rem = clamp(tm.rem + s, 10, TM_MAX); if (tm.state === "idle") { tm.dur = tm.rem; saveTm(); } tmRender();
+}
+function tmGo() {
+  try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) { tmAC = tmAC || new AC(); if (tmAC.resume) tmAC.resume(); } } catch (e) {} // 端末の音は、タップ操作の中で用意する必要がある
+  if (tm.state === "run") { tm.rem = tmRemain(); tm.state = "pause"; clearInterval(tmIv); tmIv = 0; }
+  else { if (tm.state === "idle" || tm.state === "done") tm.rem = tm.dur; tmEnd = Date.now() + tm.rem * 1000; tm.state = "run"; clearInterval(tmIv); tmIv = setInterval(tmTick, 200); keepAwake(true); }
+  tmRender();
+}
+function tmReset() { tmSet(tm.dur); }
+function openTimer() { placeOverlays(); $("tm-panel").hidden = false; tmRender(); }
+function closeTimer() { $("tm-panel").hidden = true; }
+$("timer-btn").onclick = openTimer; $("pres-timer").onclick = openTimer; $("tm-pill").onclick = openTimer; $("tm-close").onclick = closeTimer;
+$("tm-panel").addEventListener("click", e => { if (e.target === $("tm-panel")) closeTimer(); });
+$("tm-go").onclick = tmGo; $("tm-reset").onclick = tmReset; $("tm-sound").onchange = e => { tm.sound = e.target.checked; saveTm(); };
+document.querySelectorAll(".tm-set").forEach(b => b.onclick = () => tmSet(+b.dataset.s));
+document.querySelectorAll(".tm-add").forEach(b => b.onclick = () => tmAdd(+b.dataset.s));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && tm.state === "run") tmTick(); });
+tmRender();
+
 /* ================= 初期化 ================= */
 const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => { layoutStage("b"); if (!$("presentation").hidden) layoutStage("p"); redrawAll(); }) : null;
 if (ro) { ro.observe($("stage-b").parentElement); ro.observe($("stage-area")); }
 window.addEventListener("resize", () => { layoutStage("b"); if (!$("presentation").hidden) layoutStage("p"); redrawAll(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => scheduleRender());
-document.addEventListener("fullscreenchange", () => setTimeout(() => { if (!$("presentation").hidden) renderSurface("p"); }, 200));
 const flush = () => { if (current) { readForm(); persist(); } };
 window.addEventListener("beforeunload", flush);
 window.addEventListener("pagehide", flush);
