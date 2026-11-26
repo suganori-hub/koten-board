@@ -3,8 +3,8 @@
 // ・ネットワーク優先（オンライン時は常に最新、オフライン時のみキャッシュ）
 // ・skipWaiting / clients.claim で更新を即時反映
 // ・外部API（GitHub同期・AI）は一切キャッシュせず素通し
-const CACHE = "koten-board-cache-v7";
-const ASSETS = ["./", "./index.html", "./style.css?v=7", "./app.js?v=7", "./manifest.webmanifest"];
+const CACHE = "koten-board-cache-v8";
+const ASSETS = ["./", "./index.html", "./style.css?v=8", "./app.js?v=8", "./manifest.webmanifest"];
 
 self.addEventListener("install", e => {
   e.waitUntil(

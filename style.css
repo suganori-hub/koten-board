@@ -301,3 +301,41 @@ body.pf-hidden .pres-handle{opacity:.5}
 .tm-disp.warn{color:#ffc94d}.tm-disp.urgent{color:#ff8a8a}.tm-disp.done{background:#c0392b;color:#fff;animation:tmblink .6s steps(2) infinite}
 .tm-presets,.tm-adj{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .tm-presets .btn,.tm-adj .btn{min-width:78px;min-height:48px;font-size:16px}
+
+/* ======== ホワイトボード配色（プロジェクターで白板に投影）：白地・黒字・濃く彩度の高い色 ========
+   白い板に投影すると「黒」は光が出ず板の白さが出るため、暗い背景だと文字が沈む。明るい地に濃い文字が最もはっきり見える。 */
+body.theme-wb .stage-wrap{background:#fff}
+body.theme-wb .board{background:#fff;color:#000}
+body.theme-wb .gcol{font-weight:600}
+body.theme-wb .grp{background:#f6f8f5;border:2px solid #9db0a5}
+body.theme-wb .gno{background:#1d5945;color:#fff}
+body.theme-wb .empty{color:#444}
+body.theme-wb .g-orig{color:#000;background:#fffbea;box-shadow:inset 0 0 0 1px #e2d8a8}
+body.theme-wb .g-tr{color:#0a3f94}
+body.theme-wb .g-orig.active,body.theme-wb .g-tr.active{outline:3px solid #1d5945;background:#1d594512}
+body.theme-wb .ch.m1{background:#ffe14d;color:#000}
+body.theme-wb .ch.m2{background:#ffb0b0;color:#000}
+body.theme-wb .ch.hit{outline:3px solid #0a74d1;background:#c4e3ff}
+body.theme-wb .items .item{background:#fff;box-shadow:inset 0 0 0 1px #cfd8d2;border-right-color:#6d7d74}
+body.theme-wb .items .item.focus{outline:3px solid #0a74d1;background:#e8f3ff}
+body.theme-wb .item .term{color:#8a3500}
+body.theme-wb .g-gram .term{color:#b30f0f}
+body.theme-wb .item .tag{background:#e4e9e5;color:#1b1b1b}
+body.theme-wb .item .tag.ai{background:#6a4bc0;color:#fff}
+body.theme-wb .item .meta{color:#2a2a2a}
+body.theme-wb .item .meaning{color:#000}
+body.theme-wb .item .explain{color:#111}
+body.theme-wb .item[data-t="古語"]{border-right-color:#b8860b}
+body.theme-wb .item[data-t="文法"],body.theme-wb .item[data-t="助動詞"],body.theme-wb .item[data-t="助動詞候補"]{border-right-color:#d62828}
+body.theme-wb .item[data-t="助詞"],body.theme-wb .item[data-t="係助詞"]{border-right-color:#e07b00}
+body.theme-wb .item[data-t="敬語"],body.theme-wb .item[data-t="敬語候補"]{border-right-color:#7b3fc4}
+body.theme-wb .item[data-t="係り結び"]{border-right-color:#c01818}body.theme-wb .item[data-t="接続"]{border-right-color:#0a8a8a}body.theme-wb .item[data-t="表現"]{border-right-color:#15803d}
+/* 投影画面の枠・操作欄も白地に（操作ボタンは濃い色のまま、文字は黒） */
+body.theme-wb .presentation{background:#fff}
+body.theme-wb .presentation-bar,body.theme-wb .presentation-foot,body.theme-wb .presentation-bar .range,body.theme-wb .presentation-bar .check,body.theme-wb .presentation-foot .range,body.theme-wb .pf-nav #pres-count,body.theme-wb .pb-label{color:#222}
+body.theme-wb .presentation-bar .chip{background:#e7eee9;color:#111;border-color:#9db0a5}
+body.theme-wb .presentation-bar .check select{background:#fff;color:#111;border-color:#9db0a5}
+body.theme-wb .pf-sep{background:#9db0a5}
+body.theme-wb .pres-handle{background:#18352c;opacity:.75}
+body.theme-wb .presentation-foot .swatch{border-color:#777}
+body.theme-wb .swatch.on{box-shadow:0 0 0 2px #fff,0 0 0 4px #1d5945}

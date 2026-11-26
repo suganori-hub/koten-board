@@ -81,7 +81,13 @@ let lessons = load(), tombs = rd(TOMB_KEY, {}), vdraw = rd(VDRAW_KEY, {}), curre
 let presShow = [true, true, true, true];
 let hiddenTypes = new Set(), focusTerm = "", activeLine = -1, lastSel = null;
 let saveTimer = 0, renderQueued = false, pendingRender = false, strokeActive = false, lastEditAt = 0;
-let drawingEnabled = false, eraserMode = false, penColor = "#ffdf55", penWidth = 3, fingerDraw = false, autoPen = true;
+const THEME_KEY = "koten-board-theme";
+let theme = (() => { try { return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "wb"; } catch (e) { return "wb"; } })();
+// 配色ペア：暗い画面用(d)／ホワイトボード(白地)用(w)。保存済みの手書きも、いまの配色で見える色に自動で置き換えて表示する
+const PEN_PAIRS = [{ d: "#ffffff", w: "#111111" }, { d: "#ff7b7b", w: "#d62828" }, { d: "#7fd8ff", w: "#1d4ed8" }, { d: "#8be28f", w: "#15803d" }, { d: "#ffdf55", w: "#e07b00" }];
+const penPalette = () => PEN_PAIRS.map(x => theme === "wb" ? x.w : x.d);
+const dispColor = c => { const q = String(c || "").toLowerCase(), m = PEN_PAIRS.find(x => x.d === q || x.w === q); return m ? (theme === "wb" ? m.w : m.d) : c; };
+let drawingEnabled = false, eraserMode = false, penColor = theme === "wb" ? "#d62828" : "#ffdf55", penWidth = 3, fingerDraw = false, autoPen = true;
 const stageScale = { b: 1, p: 1 }; let lastFit = { o: 60, t: 45, w: 30 };
 
 /* ================= 保存 ================= */
@@ -103,7 +109,7 @@ const skeleton = p => `<div class="groups" id="${p}-groups"></div>
 
 const penTools = () => `
 <button class="btn small" data-act="draw">✎ 手書き：OFF</button>
-<span class="swatches">${["#ffdf55", "#ffffff", "#ff7b7b", "#7fd8ff", "#8be28f"].map(c => `<button class="swatch" data-color="${c}" style="background:${c}" aria-label="ペン色 ${c}"></button>`).join("")}<input type="color" data-act="color" value="#ffdf55" aria-label="ペンの色"></span>
+<span class="swatches">${penPalette().map(c => `<button class="swatch" data-color="${c}" style="background:${c}" aria-label="ペン色 ${c}"></button>`).join("")}<input type="color" data-act="color" value="${penColor}" aria-label="ペンの色"></span>
 <label class="range">太さ<input type="range" data-act="width" min="1" max="14" value="3"></label>
 <button class="btn small" data-act="eraser">消しゴム</button>
 <button class="btn small" data-act="undo">↶ 元に戻す</button>
@@ -112,7 +118,7 @@ const penTools = () => `
 <label class="check"><input type="checkbox" data-act="finger">指でも描く</label>`;
 const penLite = () => `
 <button class="btn fb" data-act="draw" data-short="1">✎ OFF</button>
-<span class="swatches">${["#ffdf55", "#ffffff", "#ff7b7b", "#7fd8ff", "#8be28f"].map(c => `<button class="swatch" data-color="${c}" style="background:${c}" aria-label="ペン色 ${c}"></button>`).join("")}</span>
+<span class="swatches">${penPalette().map(c => `<button class="swatch" data-color="${c}" style="background:${c}" aria-label="ペン色 ${c}"></button>`).join("")}</span>
 <label class="range">太さ<input type="range" data-act="width" min="1" max="14" value="3"></label>
 <button class="btn fb" data-act="eraser">消しゴム</button>
 <button class="btn fb" data-act="undo">↶ 戻す</button>`;
@@ -124,7 +130,17 @@ const markTools = () => `
 
 $("board").innerHTML = skeleton("b");
 $("pres-board").innerHTML = skeleton("p");
-document.querySelectorAll("[data-tools]").forEach(el => { el.innerHTML = el.dataset.tools === "pen" ? penTools() : el.dataset.tools === "penlite" ? penLite() : markTools(); });
+const renderToolBars = () => document.querySelectorAll("[data-tools]").forEach(el => { el.innerHTML = el.dataset.tools === "pen" ? penTools() : el.dataset.tools === "penlite" ? penLite() : markTools(); });
+renderToolBars();
+function applyTheme(t, quiet) {
+  const old = theme; theme = t === "dark" ? "dark" : "wb";
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+  document.body.classList.toggle("theme-wb", theme === "wb");
+  const m = PEN_PAIRS.find(x => x.d === penColor || x.w === penColor); if (m) penColor = theme === "wb" ? m.w : m.d; // 色の対応するペンへ切替
+  renderToolBars(); if (typeof syncTools === "function") syncTools();
+  document.querySelectorAll(".theme-select").forEach(s => { s.value = theme; });
+  if (old !== theme || !quiet) { if (typeof redrawAll === "function") redrawAll(); }
+}
 
 const hostOf = p => $(p === "b" ? "board" : "pres-board");
 const paneOn = (p, i) => (p === "p" ? presShow[i] : document.querySelector(`.show-pane[data-pane="${PANES[i]}"]`).checked);
@@ -683,14 +699,14 @@ const strokeWidth = (s, pt) => (s.width || 3) * (s.erase ? 6 : 0.35 + 0.9 * (pt.
 function drawStroke(ctx, s) {
   const pts = s.points; if (!pts.length) return;
   ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.globalCompositeOperation = s.erase ? "destination-out" : "source-over";
-  ctx.strokeStyle = ctx.fillStyle = s.color || "#ffdf55";
+  ctx.strokeStyle = ctx.fillStyle = dispColor(s.color || "#ffdf55");
   if (pts.length === 1) { ctx.beginPath(); ctx.arc(pts[0].x * STAGE_W, pts[0].y * STAGE_H, strokeWidth(s, pts[0]) / 2, 0, Math.PI * 2); ctx.fill(); }
   else for (let i = 1; i < pts.length; i++) segment(ctx, s, i);
   ctx.globalCompositeOperation = "source-over";
 }
 function segment(ctx, s, i) {
   const a = s.points[i - 1], b = s.points[i];
-  ctx.globalCompositeOperation = s.erase ? "destination-out" : "source-over"; ctx.strokeStyle = s.color || "#ffdf55"; ctx.lineCap = "round"; ctx.lineWidth = strokeWidth(s, b);
+  ctx.globalCompositeOperation = s.erase ? "destination-out" : "source-over"; ctx.strokeStyle = dispColor(s.color || "#ffdf55"); ctx.lineCap = "round"; ctx.lineWidth = strokeWidth(s, b);
   ctx.beginPath(); ctx.moveTo(a.x * STAGE_W, a.y * STAGE_H); ctx.lineTo(b.x * STAGE_W, b.y * STAGE_H); ctx.stroke();
 }
 function canvasCtx(p) {
@@ -974,6 +990,9 @@ $("sync-code-apply").onclick = () => {
 const coarseMQ = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
 const setCoarse = () => document.body.classList.toggle("coarse", !!(coarseMQ && coarseMQ.matches) || navigator.maxTouchPoints > 1);
 setCoarse(); if (coarseMQ && coarseMQ.addEventListener) coarseMQ.addEventListener("change", setCoarse);
+document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("theme-select")) applyTheme(e.target.value); });
+$("pres-theme").onclick = () => { applyTheme(theme === "wb" ? "dark" : "wb"); toast(theme === "wb" ? "配色：ホワイトボード（白地・黒字）" : "配色：暗い画面"); };
+applyTheme(theme, true);
 $("bn-prev").onclick = () => stepBy("b", -1); $("bn-next").onclick = () => stepBy("b", 1);
 $("pres-prev2").onclick = () => stepBy("p", -1); $("pres-next2").onclick = () => stepBy("p", 1);
 document.querySelectorAll(".auto-reset").forEach(b => b.onclick = () => { if (!current) return; setAuto(true); toast("自動で大きく表示に戻しました"); });
