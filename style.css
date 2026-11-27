@@ -364,3 +364,58 @@ body.theme-wb .swatch.on{box-shadow:0 0 0 2px #fff,0 0 0 4px #1d5945}
 body.pf-hidden .presentation.pos-left{grid-template-columns:0 minmax(0,1fr)}
 body.pf-hidden .presentation.pos-left>.presentation-foot{display:none}
 .presentation.pos-bottom{display:flex}
+
+/* ---- v6: 隠して答え合わせ（クイズ） ---- */
+.ch.blank{color:transparent!important;background:#d8b96c66;border-bottom:4px solid #d8b96c;border-radius:3px;cursor:pointer;text-shadow:none}
+.gcol.qcov{position:relative;cursor:pointer}
+.g-tr.qcov{color:transparent;outline:3px dashed #d8b96ccc;outline-offset:-3px;border-radius:10px;text-shadow:none}
+.g-words.qcov .item,.g-gram.qcov .item{visibility:hidden}
+.g-words.qcov,.g-gram.qcov{outline:3px dashed #d8b96ccc;outline-offset:-3px;border-radius:10px}
+.gcol.qcov::after{content:"タップで表示";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;font:700 22px/1.2 system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;letter-spacing:.2em;color:#d8b96c;pointer-events:none}
+body.theme-wb .ch.blank{background:#ffe9a8;border-bottom-color:#e07b00}
+body.theme-wb .gcol.qcov::after{color:#7a4a00}
+body.theme-wb .g-tr.qcov,body.theme-wb .g-words.qcov,body.theme-wb .g-gram.qcov{outline-color:#c98a1a}
+.pf-tools #pres-ans{grid-column:auto}
+.pos-left .pf-tools>#pres-ans{grid-column:1/-1}
+.q-check{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;margin:6px 0 2px!important}
+.q-check input{width:auto!important;margin:0!important;display:inline-block!important}
+.pk-pill{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:57;display:flex;align-items:center;gap:12px;background:#d8b96c;color:#18352c;border:2px solid #18352c;border-radius:999px;padding:6px 8px 6px 20px;font-size:26px;font-weight:900;min-height:48px}
+.pk-pill #pk-pill-x{width:36px;height:36px;border-radius:50%;background:#18352c;color:#fff;display:grid;place-items:center;font-size:20px}
+/* ---- v6: 配布プリント ---- */
+.sheet-opts{margin-bottom:14px}
+.sheet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 16px;align-items:end}
+.sheet-grid label{font-size:12px;font-weight:700;color:#45534b;display:block}
+.sheet-grid label.check{display:flex;align-items:center;gap:6px;min-height:40px}
+.sheet-grid select{display:block;width:100%;margin-top:6px;padding:9px 10px;border:1px solid #cbd6cf;border-radius:7px;background:#fff;font-size:14px}
+.sh-doc{display:grid;gap:18px;justify-items:center}
+.sh-page{background:#fff;color:#000;width:210mm;max-width:100%;min-height:297mm;padding:14mm 14mm;box-shadow:0 1px 10px #0002;border:1px solid #d5ded8;font-family:"Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;line-height:1.7;box-sizing:border-box}
+.sh-head h1{font-size:1.6em;margin:0 0 .1em;font-weight:800}.sh-sub{font-size:.85em;color:#333}
+.sh-name{margin:.6em 0 1em;font-size:.9em;border-bottom:1.5px solid #000;padding-bottom:.4em}
+.sh-sec{margin:0 0 1.4em;break-inside:avoid-page}
+.sh-sec h2,.sh-key h2,.sh-key h3{font-size:1em;font-weight:800;margin:.2em 0 .5em;font-family:system-ui,"Hiragino Sans","Yu Gothic UI",sans-serif}
+.sh-text{border:1.5px solid #000;padding:.8em 1em;font-size:1.1em;line-height:1.9;margin-bottom:.8em}
+.sh-text.vert{writing-mode:vertical-rl;text-orientation:mixed;direction:ltr;overflow:visible;width:100%;padding:.7em .9em;display:block;text-align:start;overflow-x:auto}
+.sh-text .bl{display:inline-block;border:1.2px solid #000;min-width:1.25em;min-height:calc(var(--n)*1.1em);text-align:center;font-size:1em;line-height:1.1;vertical-align:baseline;margin:.1em 0;font-family:system-ui,sans-serif}
+.sh-text:not(.vert) .bl{min-width:calc(var(--n)*1.1em);min-height:1.2em}
+.sh-text .ul{text-decoration:underline;text-underline-offset:.2em}.sh-text sup{font-size:.6em;font-family:system-ui,sans-serif}
+.sh-ans-list{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:.5em 1.4em}
+.sh-ans-list li{display:flex;align-items:baseline;gap:.5em;font-size:.95em}
+.sh-ans-list .no{font-family:system-ui,sans-serif}.sh-ans-list .box{flex:1;border-bottom:1.2px solid #000;min-height:1.6em}.hint-t{font-size:.72em;color:#444;white-space:nowrap}
+.sh-sent{margin-bottom:.9em;break-inside:avoid}.sh-sent .o{font-size:1.02em}
+.wl{border-bottom:1.2px solid #000;height:1.9em}
+.sh-qs{list-style:none;padding:0;margin:0}.sh-qs li{margin-bottom:.7em;break-inside:avoid}
+.sh-keypage{min-height:0}.sh-key ol{list-style:none;padding:0;margin:.2em 0 .8em}.sh-key p{margin:.2em 0 .8em}.sh-key li{margin:.15em 0}
+.empty-sheet{color:#666;padding:2em}
+@media print{
+ @page{size:A4;margin:10mm}
+ body.print-sheet .topbar,body.print-sheet .sidebar,body.print-sheet .page-head,body.print-sheet .tabs,body.print-sheet .sheet-opts,body.print-sheet .presentation,body.print-sheet #toast,body.print-sheet .timer,body.print-sheet .picker,body.print-sheet .b-nav{display:none!important}
+ body.print-sheet #tab-board,body.print-sheet #tab-edit,body.print-sheet #tab-guide{display:none!important}
+ body.print-sheet #tab-sheet{display:block!important}
+ body.print-sheet .layout{display:block}body.print-sheet .main{padding:0;max-width:none}
+ body.print-sheet .sh-doc{display:block}
+ body.print-sheet .sh-page{box-shadow:none;border:0;width:auto;min-height:0;padding:0;margin:0}
+ body.print-sheet .sh-keypage{break-before:page;page-break-before:always}
+ body.print-sheet{background:#fff}
+}
+body.viewer [data-tab="sheet"],body.viewer #tab-sheet{display:none!important}
+body.theme-wb .g-tr.qcov{color:transparent}

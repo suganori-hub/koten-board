@@ -39,6 +39,7 @@ function normItem(it) {
   it = it && typeof it === "object" ? it : {};
   const o = { ...it, type: str(it.type) || "その他", term: str(it.term), pos: str(it.pos), conjType: str(it.conjType), conjForm: str(it.conjForm), meaning: str(it.meaning), explain: str(it.explain), line: it.line == null ? "" : String(it.line) };
   if (it.ai) o.ai = true; else delete o.ai;
+  if (it.q) o.q = true; else delete o.q;
   return o;
 }
 function normLesson(x) {
@@ -54,7 +55,8 @@ function normLesson(x) {
     view: {
       lh: clamp(+v.lh || 1.8, 1.2, 3.5), ls: clamp(v.ls == null || isNaN(+v.ls) ? 0.06 : +v.ls, 0, 0.6),
       auto: v.auto !== false, oPx: clamp(+v.oPx || oldSize || 0, 0, 340), tPx: clamp(+v.tPx || 0, 0, 260), wPx: clamp(+v.wPx || 0, 0, 160),
-      per: ["auto", "1", "2", "3", "4", "all"].includes(String(v.per)) ? String(v.per) : "auto", brk: v.brk !== false
+      per: ["auto", "1", "2", "3", "4", "all"].includes(String(v.per)) ? String(v.per) : "auto", brk: v.brk !== false,
+      qtr: v.qtr === true, qbl: v.qbl === true, qex: v.qex === true
     },
     updatedAt: Number(x.updatedAt) || 0, ver: SCHEMA
   };
@@ -205,20 +207,44 @@ function itemHTML(it, p) {
   const ai = it.ai && p === "b" ? '<span class="tag ai">AI下書き</span>' : "";
   return `<div class="item${focus}" data-t="${esc(it.type)}" data-term="${esc(it.term)}"><div class="item-head"><span class="term">${esc(it.term) || "（未入力）"}</span><span class="tag">${esc(it.type)}</span>${ai}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ""}${it.meaning ? `<div class="meaning">意味：${esc(it.meaning)}</div>` : ""}${it.explain ? `<div class="explain">${esc(it.explain)}</div>` : ""}</div>`;
 }
+/* ---------- 隠して答え合わせ（クイズ）：訳・解説・本文の語句を隠し、タップで表示 ---------- */
+let blankAt = {};
+const qOpen = new Set(); // 開いた答え：「t:文番号」「x:文番号:w/g」「b:項目番号」
+function findRange(text, term) { // 本文中での語句の位置 [開始, 終了)。見つからなければ null（辞書形などは語尾を削って探す）
+  const t = str(term).replace(/[（(].*?[）)]/g, "").trim(); if (!t) return null;
+  const cands = [t]; t.split(/[〜～~・／/、，,\s]+/).map(x => x.trim()).filter(x => x && x !== t).forEach(x => cands.push(x));
+  for (const c of cands) for (let k = c.length; k >= Math.min(2, c.length); k--) { const i = text.indexOf(c.slice(0, k)); if (i >= 0) return [i, i + k]; }
+  return null;
+}
+function quizItems(text) { // 問題にする語句と本文中の位置（重なりは除く）。「問題にする」が1つも無ければ、本文に出てくる全語句
+  const all = current.items.map((it, idx) => ({ it, idx })).filter(x => x.it.term), fl = all.filter(x => x.it.q), src = fl.length ? fl : all;
+  const out = [];
+  src.forEach(x => { const r = findRange(text, x.it.term); if (r && !out.some(o => r[0] < o.r[1] && o.r[0] < r[1])) out.push({ idx: x.idx, it: x.it, r }); });
+  return out.sort((a, b) => a.r[0] - b.r[0]);
+}
+function openAnswers(p) {
+  const root = $(p + "-groups"); if (!root) return;
+  root.querySelectorAll(".grp:not(.off) .qcov").forEach(el => { qOpen.add(el.dataset.qk); el.classList.remove("qcov"); });
+  root.querySelectorAll(".grp:not(.off) .ch.blank").forEach(el => { qOpen.add("b:" + el.dataset.b); el.classList.remove("blank"); });
+  document.querySelectorAll(".ch.blank").forEach(el => { if (qOpen.has("b:" + el.dataset.b)) el.classList.remove("blank"); });
+}
+function setQuiz(key, on) { if (!current) return; current.view[key] = !!on; qOpen.clear(); markDirty(); renderAll(); }
 function groupHTML(g, gi, p, cls, hits) {
   const act = activeLine === gi ? " active" : "";
   let h = `<div class="grp" data-g="${gi}"><span class="gno">${g.orig ? gi + 1 : "ほか"}</span>`;
   if (g.orig) {
     let idx = g.s.s; h += `<div class="gcol g-orig original-text${act}" data-g="${gi}">`;
     for (const ch of g.s.t) {
-      const c = [cls[idx] ? "m" + cls[idx] : "", hits.has(idx) ? "hit" : ""].filter(Boolean).join(" ");
-      h += `<span class="ch${c ? " " + c : ""}" data-i="${idx}">${esc(ch)}</span>`; idx += ch.length;
+      const bk = current.view.qbl ? blankAt[idx] : undefined, bo = bk !== undefined && !qOpen.has("b:" + bk);
+      const c = [cls[idx] ? "m" + cls[idx] : "", hits.has(idx) ? "hit" : "", bo ? "blank" : ""].filter(Boolean).join(" ");
+      h += `<span class="ch${c ? " " + c : ""}" data-i="${idx}"${bk !== undefined ? ` data-b="${bk}"` : ""}>${esc(ch)}</span>`; idx += ch.length;
     }
     h += "</div>";
   }
-  if (g.tr) h += `<div class="gcol g-tr${act}" data-g="${gi}">${esc(g.tr)}</div>`;
-  if (g.words.length) h += `<div class="gcol g-words items">${g.words.map(x => itemHTML(x, p)).join("")}</div>`;
-  if (g.gram.length) h += `<div class="gcol g-gram items">${g.gram.map(x => itemHTML(x, p)).join("")}</div>`;
+  const v = current.view, cv = k => (qOpen.has(k) ? "" : " qcov"), qa = k => ` data-qk="${k}"`;
+  if (g.tr) { const k = "t:" + gi; h += `<div class="gcol g-tr${act}${v.qtr ? cv(k) : ""}" data-g="${gi}"${qa(k)}>${esc(g.tr)}</div>`; }
+  if (g.words.length) { const k = "x:" + gi + ":w"; h += `<div class="gcol g-words items${v.qex ? cv(k) : ""}"${qa(k)}>${g.words.map(x => itemHTML(x, p)).join("")}</div>`; }
+  if (g.gram.length) { const k = "x:" + gi + ":g"; h += `<div class="gcol g-gram items${v.qex ? cv(k) : ""}"${qa(k)}>${g.gram.map(x => itemHTML(x, p)).join("")}</div>`; }
   return h + "</div>";
 }
 function renderChips() {
@@ -311,13 +337,14 @@ function stepBy(p, d) {
   if (st.step === before && d > 0) toast("最後の文です");
   applyStep(p);
 }
-function revealPage(p) { const st = S[p]; if (!current) return; st.fresh = false; const [, b] = st.pages[Math.max(0, st.page)] || [0, 0]; st.step = b; applyStep(p); }
+function revealPage(p) { const st = S[p]; if (!current) return; st.fresh = false; const [, b] = st.pages[Math.max(0, st.page)] || [0, 0]; st.step = b; applyStep(p); openAnswers(p); }
 function renderSurface(p) {
   if (!current) return;
   const st = S[p], wrap = $(p + "-groups"), groups = buildGroups(); st.G = groups.length;
   const text = getOrig(), cls = new Array(text.length).fill(0);
   current.marks.forEach(m => { for (let i = Math.max(0, m.s); i < Math.min(text.length, m.e); i++) cls[i] = m.c; });
   const hits = hitSet(text, focusTerm);
+  blankAt = {}; if (current.view.qbl) quizItems(text).forEach(q => { for (let i = q.r[0]; i < q.r[1]; i++) blankAt[i] = q.idx; });
   wrap.innerHTML = groups.length ? groups.map((g, i) => groupHTML(g, i, p, cls, hits)).join("") : '<p class="empty">本文が未入力です（教材編集で入力してください）</p>';
   ["orig", "tr", "words", "gram"].forEach((k, i) => wrap.classList.toggle("hide-" + k, !paneOn(p, i)));
   applyView(p);
@@ -339,6 +366,8 @@ function syncViewUI() {
   document.querySelectorAll(".auto-fit").forEach(c => { c.checked = v.auto; });
   document.querySelectorAll(".auto-reset").forEach(b => { b.classList.toggle("primary", !v.auto); b.disabled = v.auto; });
   document.querySelectorAll(".brk-toggle").forEach(c => { c.checked = v.brk; });
+  document.querySelectorAll(".q-tr").forEach(c => { c.checked = v.qtr; }); document.querySelectorAll(".q-bl").forEach(c => { c.checked = v.qbl; }); document.querySelectorAll(".q-ex").forEach(c => { c.checked = v.qex; });
+  if ($("pres-qtr")) { $("pres-qtr").classList.toggle("on", v.qtr); $("pres-qbl").classList.toggle("on", v.qbl); }
   document.querySelectorAll(".per-select").forEach(c => { c.value = v.per; });
   $("v-opx").value = v.oPx || Math.round(lastFit.o); $("v-tpx").value = v.tPx || Math.round(lastFit.t); $("v-wpx").value = v.wPx || Math.round(lastFit.w);
   $("v-lh").value = v.lh; $("v-ls").value = v.ls;
@@ -380,6 +409,7 @@ function renderItemsEditor() {
   <label>活用形<input data-field="conjForm" list="dl-form" value="${esc(it.conjForm)}" placeholder="例：連体形"></label>
   <label>表示する文<select data-field="line">${lineOpts(it.line)}</select></label>
  </div>
+ <label class="check q-check"><input type="checkbox" data-field="q"${it.q ? " checked" : ""}>穴埋め・確認問題にする</label>
  <div class="ic-grid2">
   <label>意味<input data-field="meaning" value="${esc(it.meaning)}" placeholder="例：強意"></label>
   <label>文法上の説明<textarea data-field="explain" rows="2" placeholder="接続・係り結び・敬語の種類など">${esc(it.explain)}</textarea></label>
@@ -400,13 +430,13 @@ function readForm() {
   if (current.original !== oldOrig) lastSel = null;
   const rows = [...$("items-editor").querySelectorAll(".item-card")];
   if (rows.length === current.items.length) {
-    current.items = rows.map((r, i) => { const o = { ...current.items[i] }; r.querySelectorAll("[data-field]").forEach(f => { o[f.dataset.field] = f.value; }); return o; });
+    current.items = rows.map((r, i) => { const o = { ...current.items[i] }; r.querySelectorAll("[data-field]").forEach(f => { o[f.dataset.field] = f.type === "checkbox" ? f.checked : f.value; }); return o; });
   }
 }
 function onEdit() { readForm(); markDirty(); scheduleRender(); updateLinesNote(); if (lineList(getOrig(), current.view.brk).length !== lastN && !$("items-editor").contains(document.activeElement)) renderItemsEditor(); clearTimeout(onEdit.t); onEdit.t = setTimeout(renderList, 250); }
 function selectLesson(id) {
   const x = lessons.find(l => l.id === id); if (!x) return;
-  current = x; focusTerm = ""; activeLine = -1; lastSel = null; hiddenTypes = new Set(); S.b.step = null; S.p.step = 0; S.b.page = S.p.page = -1;
+  qOpen.clear(); current = x; focusTerm = ""; activeLine = -1; lastSel = null; hiddenTypes = new Set(); S.b.step = null; S.p.step = 0; S.b.page = S.p.page = -1;
   fill(); renderList(); renderAll(); syncTools();
 }
 const blank = () => normLesson({ id: uid(), title: "新しい授業", updatedAt: Date.now() });
@@ -425,6 +455,8 @@ $("delete").onclick = () => {
 };
 ["lesson-title", "lesson-source", "lesson-class", "lesson-session", "lesson-goal", "lesson-original", "lesson-translation", "lesson-notes"].forEach(id => $(id).addEventListener("input", onEdit));
 $("items-editor").addEventListener("input", onEdit);
+$("q-all").onclick = () => { if (!current || isViewer()) return; current.items.forEach(it => { it.q = true; }); renderItemsEditor(); onEdit(); };
+$("q-none").onclick = () => { if (!current || isViewer()) return; current.items.forEach(it => { delete it.q; }); renderItemsEditor(); onEdit(); };
 $("items-editor").addEventListener("change", e => { if (e.target.dataset.field === "type") e.target.closest(".item-card").dataset.t = e.target.value; onEdit(); });
 $("items-editor").addEventListener("click", e => {
   const b = e.target.closest("[data-op]"); if (!b) return;
@@ -556,13 +588,14 @@ document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === b));
   document.querySelectorAll(".tab-panel").forEach(x => x.classList.toggle("active", x.id === "tab-" + b.dataset.tab));
   if (b.dataset.tab === "board") renderAll();
+  if (b.dataset.tab === "sheet") renderSheet();
 });
 $("open-board").onclick = () => document.querySelector('[data-tab="board"]').click();
 document.querySelectorAll(".show-pane").forEach(cb => cb.onchange = () => renderSurface("b"));
 $("reveal-mode").onclick = () => stepBy("b", -1);
 $("reveal-next").onclick = () => stepBy("b", 1);
 $("reveal-all").onclick = () => revealPage("b");
-$("reveal-reset").onclick = () => { S.b.fresh = false; S.b.step = 0; applyStep("b"); };
+$("reveal-reset").onclick = () => { S.b.fresh = false; S.b.step = 0; if (qOpen.size) { qOpen.clear(); renderSurface("b"); } else applyStep("b"); };
 $("print-board").onclick = () => { revealPage("b"); window.print(); };
 
 function setAuto(on) {
@@ -588,6 +621,10 @@ document.addEventListener("change", e => {
 // 本文↔現代語訳の対応表示、語句→本文ハイライト、種類の絞り込み
 document.addEventListener("click", e => {
   const sel = window.getSelection && window.getSelection().toString();
+  const qc = e.target.closest(".qcov");
+  if (qc) { qOpen.add(qc.dataset.qk); document.querySelectorAll(`.qcov[data-qk="${qc.dataset.qk}"]`).forEach(x => x.classList.remove("qcov")); return; }
+  const bl = e.target.closest(".ch.blank");
+  if (bl) { qOpen.add("b:" + bl.dataset.b); document.querySelectorAll(`.ch.blank[data-b="${bl.dataset.b}"]`).forEach(x => x.classList.remove("blank")); return; }
   const col = e.target.closest(".g-orig, .g-tr");
   if (col && !sel) { const n = +col.dataset.g; activeLine = activeLine === n ? -1 : n; setActiveLine(activeLine); return; }
   const it = e.target.closest(".item");
@@ -680,7 +717,7 @@ document.addEventListener("keydown", e => {
   if ($("presentation").hidden || !$("picker").hidden || !$("tm-panel").hidden) return;
   if (k === "ArrowRight" || k === " " || k === "PageDown" || k === "Enter") { e.preventDefault(); stepBy("p", 1); }
   else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace") { e.preventDefault(); stepBy("p", -1); }
-  else if (k === "Home") { S.p.step = revealAll ? (S.p.pages[0] ? S.p.pages[0][1] : 0) : 0; if (revealAll) S.p.page = -1; applyStep("p"); }
+  else if (k === "Home") { const had = qOpen.size; qOpen.clear(); S.p.step = revealAll ? (S.p.pages[0] ? S.p.pages[0][1] : 0) : 0; if (revealAll) S.p.page = -1; if (had) renderSurface("p"); else applyStep("p"); }
   else if (k === "End" || k === "a" || k === "A") revealPage("p");
   else if (k === "Escape") exitPres();
   else if (k === "+" || k === "=") adjust("o", 1);
@@ -1006,7 +1043,10 @@ window.addEventListener("resize", applyPos); applyPos();
 document.querySelectorAll(".reveal-select").forEach(s => { s.value = revealAll ? "all" : "step"; });
 document.addEventListener("change", e => {
   const c = e.target; if (!c.classList) return;
-  if (c.classList.contains("pos-select")) { posPref = c.value; try { localStorage.setItem(POS_KEY, posPref); } catch (x) {} applyPos(); setTimeout(() => { layoutStage("p"); redrawAll(); }, 60); }
+  if (c.classList.contains("q-tr")) setQuiz("qtr", c.checked);
+  else if (c.classList.contains("q-bl")) setQuiz("qbl", c.checked);
+  else if (c.classList.contains("q-ex")) setQuiz("qex", c.checked);
+  else if (c.classList.contains("pos-select")) { posPref = c.value; try { localStorage.setItem(POS_KEY, posPref); } catch (x) {} applyPos(); setTimeout(() => { layoutStage("p"); redrawAll(); }, 60); }
   else if (c.classList.contains("reveal-select")) {
     revealAll = c.value === "all"; try { localStorage.setItem(REVEAL_KEY, c.value); } catch (x) {}
     document.querySelectorAll(".reveal-select").forEach(s => { s.value = c.value; });
@@ -1014,6 +1054,9 @@ document.addEventListener("change", e => {
   }
 });
 document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("theme-select")) applyTheme(e.target.value); });
+$("pres-qtr").onclick = () => setQuiz("qtr", !current.view.qtr);
+$("pres-qbl").onclick = () => setQuiz("qbl", !current.view.qbl);
+$("pres-ans").onclick = () => { openAnswers("p"); };
 $("pres-theme").onclick = () => { applyTheme(theme === "wb" ? "dark" : "wb"); toast(theme === "wb" ? "配色：ホワイトボード（白地・黒字）" : "配色：暗い画面"); };
 applyTheme(theme, true);
 $("bn-prev").onclick = () => stepBy("b", -1); $("bn-next").onclick = () => stepBy("b", 1);
@@ -1093,21 +1136,24 @@ function pkDraw() {
     ticks++; pkShow(Array.from({ length: n }, () => rollPool[rndInt(rollPool.length)]), "roll");
     if (ticks >= 14) {
       clearInterval(iv); pkBusy = false;
-      pkShow(res, "fin"); pk.last = res;
+      pkShow(res, "fin"); pk.last = res; pillOn = true;
       if (pk.noRepeat) res.forEach(x => { if (!pk.done.includes(x)) pk.done.push(x); });
       savePk(); pkInfo();
     }
   }, 70);
 }
 function openPicker() {
-  placeOverlays(); $("picker").hidden = false; pkFill();
+  placeOverlays(); $("picker").hidden = false; pkPill(); pkFill();
   if (pk.last && pk.last.length) pkShow(pk.last, "fin");
 }
-function closePicker() { $("picker").hidden = true; }
+let pillOn = false;
+function pkPill() { const on = pillOn && pk.last && pk.last.length && $("picker").hidden; $("pk-pill").hidden = !on; if (on) $("pk-pill-t").textContent = "🎯 " + pk.last.join("・") + "番"; }
+function closePicker() { $("picker").hidden = true; pkPill(); }
+$("pk-pill").onclick = e => { if (e.target.id === "pk-pill-x") { pillOn = false; pkPill(); } else openPicker(); };
 $("pick-btn").onclick = openPicker; $("pres-pick2").onclick = openPicker; $("pk-close").onclick = closePicker;
 $("picker").addEventListener("click", e => { if (e.target === $("picker")) closePicker(); });
 $("pk-go").onclick = pkDraw;
-$("pk-reset").onclick = () => { pk.done = []; pk.last = []; savePk(); pkInfo(); $("pk-result").className = "pk-result"; $("pk-result").innerHTML = '<span class="pk-ph">履歴をリセットしました</span>'; };
+$("pk-reset").onclick = () => { pk.done = []; pk.last = []; pillOn = false; savePk(); pkInfo(); $("pk-result").className = "pk-result"; $("pk-result").innerHTML = '<span class="pk-ph">履歴をリセットしました</span>'; };
 ["pk-from", "pk-to", "pk-skip", "pk-norep"].forEach(id => $(id).addEventListener("input", () => { readPk(); pkInfo(); }));
 $("pk-from").addEventListener("change", () => { readPk(); pkFill(); }); $("pk-to").addEventListener("change", () => { readPk(); pkFill(); });
 document.querySelectorAll(".pk-count").forEach(b => b.onclick = () => { pk.count = +b.dataset.n; savePk(); pkFill(); });
@@ -1170,6 +1216,81 @@ document.querySelectorAll(".tm-set").forEach(b => b.onclick = () => tmSet(+b.dat
 document.querySelectorAll(".tm-add").forEach(b => b.onclick = () => tmAdd(+b.dataset.s));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && tm.state === "run") tmTick(); });
 tmRender();
+
+
+/* ================= 配布プリント（穴埋め・確認小テストの自動生成） ================= */
+const SHEET_KEY = "koten-board-sheet";
+const sh = Object.assign({ a: "word", hint: true, b: true, c: true, n: 0, ans: true, fs: 12, dir: "auto", seed: 1 }, rd(SHEET_KEY, {}));
+const saveSh = () => wr(SHEET_KEY, sh);
+const circ = n => (n >= 1 && n <= 20 ? String.fromCharCode(0x2460 + n - 1) : "(" + n + ")");
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function pickSome(arr, n, seed) { // n個を無作為に選び、元の並び順に戻す
+  if (!n || n >= arr.length) return arr.slice();
+  const r = rng(seed), idx = arr.map((_, i) => i); for (let i = idx.length - 1; i > 0; i--) { const k = Math.floor(r() * (i + 1)); [idx[i], idx[k]] = [idx[k], idx[i]]; }
+  return idx.slice(0, n).sort((x, y) => x - y).map(i => arr[i]);
+}
+function sheetQuestions() { // 語句の項目から確認問題を作る
+  const all = current.items.filter(it => it.term), fl = all.filter(it => it.q), src = pickSome(fl.length ? fl : all, sh.n, sh.seed), qs = [];
+  src.forEach(it => {
+    const t = it.term, conj = [it.pos, it.conjType, it.conjForm].filter(Boolean).join("・");
+    if (it.meaning) qs.push({ q: `「${t}」の意味を答えなさい。`, a: it.meaning });
+    if (conj) qs.push({ q: `「${t}」の品詞（活用の種類・活用形）を答えなさい。`, a: conj });
+    if (it.explain) qs.push({ q: it.type === "敬語" ? `「${t}」の敬語の種類と、敬意の対象を答えなさい。` : it.type === "係り結び" ? `「${t}」の係り結びについて説明しなさい。` : `「${t}」について、文法的に説明しなさい。`, a: it.explain });
+  });
+  return qs;
+}
+function sheetBody(text, items, vert, mode) { // 本文（空欄または下線つき）
+  const at = new Map(items.map((q, i) => [q.r[0], { q, i }])); let h = "", i = 0;
+  while (i < text.length) {
+    const o = at.get(i);
+    if (o) { const len = o.q.r[1] - o.q.r[0], term = text.slice(o.q.r[0], o.q.r[1]);
+      h += mode === "mean" ? `<span class="ul"><sup>${circ(o.i + 1)}</sup>${esc(term)}</span>` : `<span class="bl" style="--n:${len}">${circ(o.i + 1)}</span>`;
+      i = o.q.r[1]; continue; }
+    const ch = text[i]; h += ch === "\n" ? "<br>" : esc(ch); i++;
+  }
+  return h;
+}
+function vertHeight(text, fs) { // 縦書きの高さ(cm)：A4の幅に列が収まる最小の高さ。収まらなければ null（横書きへ）
+  const em = fs * 0.03528, colW = em * 1.9, maxCols = Math.floor(17.5 / colW), lines = text.split("\n");
+  for (let H = 7; H <= 15; H += 0.5) { const cpc = Math.floor(H / (em * 1.08)); if (cpc < 6) continue; const cols = lines.reduce((s, l) => s + Math.max(1, Math.ceil(l.length / cpc)), 0); if (cols <= maxCols) return H; }
+  return null;
+}
+function buildSheet() {
+  if (!current) return { html: "", warn: "教材を選んでください" };
+  const text = getOrig().replace(/\s+$/, ""); if (!text.trim()) return { html: '<p class="empty-sheet">本文が未入力です（教材編集で入力してください）。</p>' };
+  const items = quizItems(text).slice(0, 20), qs = sh.c ? sheetQuestions() : [], sents = sh.b ? lineList(text, true) : [], tr = sh.b ? trLinesFor(sents.length) : [];
+  const H = sh.dir === "h" ? null : vertHeight(text, sh.fs), vert = H != null;
+  const head = `<header class="sh-head"><h1>${esc(current.title || "古文")}</h1><div class="sh-sub">${esc([current.className, current.session, current.source].filter(Boolean).join("　"))}</div><div class="sh-name">　　年　　組　　番　氏名（　　　　　　　　　　　）　得点（　　　／　　　）</div></header>`;
+  let n = 0, body = "", ans = "";
+  if (sh.a !== "off" && items.length) {
+    n++; const word = sh.a === "word";
+    body += `<section class="sh-sec"><h2>問${n}　${word ? `次の本文の空欄${circ(1)}〜${circ(items.length)}に入る語句を書きなさい。` : `次の本文の下線部${circ(1)}〜${circ(items.length)}の意味を書きなさい。`}</h2>`;
+    body += `<div class="sh-text${vert ? " vert" : ""}"${vert ? ` style="height:${H}cm"` : ""}>${sheetBody(text, items, vert, sh.a)}</div><ol class="sh-ans-list">`;
+    body += items.map((q, i) => `<li><span class="no">${circ(i + 1)}</span><span class="box"></span>${sh.hint && word && q.it.meaning ? `<span class="hint-t">ヒント：${esc(q.it.meaning)}</span>` : ""}</li>`).join("") + "</ol></section>";
+    ans += `<h3>問${n}</h3><p>${items.map((q, i) => `${circ(i + 1)} ${esc(word ? text.slice(q.r[0], q.r[1]) : q.it.meaning || q.it.explain || "（未入力）")}`).join("　")}</p>`;
+  }
+  if (sh.b && sents.length) {
+    n++; body += `<section class="sh-sec"><h2>問${n}　次の各文を現代語訳しなさい。</h2>` + sents.map((s, i) => `<div class="sh-sent"><div class="o">（${i + 1}）${esc(s.t)}</div><div class="wl"></div><div class="wl"></div></div>`).join("") + "</section>";
+    ans += `<h3>問${n}</h3><ol class="sh-ans-tr">` + tr.map((t, i) => `<li>（${i + 1}）${esc(t || "（現代語訳が未入力です）")}</li>`).join("") + "</ol>";
+  }
+  if (sh.c && qs.length) {
+    n++; body += `<section class="sh-sec"><h2>問${n}　次の問いに答えなさい。</h2><ol class="sh-qs">` + qs.map((q, i) => `<li><div class="q">（${i + 1}）${esc(q.q)}</div><div class="wl"></div></li>`).join("") + "</ol></section>";
+    ans += `<h3>問${n}</h3><ol class="sh-ans-tr">` + qs.map((q, i) => `<li>（${i + 1}）${esc(q.a)}</li>`).join("") + "</ol>";
+  }
+  if (!n) body = '<p class="empty-sheet">出題できる内容がありません。語句（意味・品詞・説明）や現代語訳を入力してください。</p>';
+  const key = sh.ans && ans ? `<section class="sh-key"><h2>解答</h2><div class="sh-sub">${esc(current.title || "")}</div>${ans}</section>` : "";
+  return { html: `<div class="sh-page" style="font-size:${sh.fs}pt">${head}${body}</div>${key ? `<div class="sh-page sh-keypage" style="font-size:${sh.fs}pt">${key}</div>` : ""}`, vert };
+}
+function renderSheet() {
+  if (!$("sheet-doc")) return;
+  $("sh-a").value = sh.a; $("sh-hint").checked = sh.hint; $("sh-b").checked = sh.b; $("sh-c").checked = sh.c; $("sh-n").value = String(sh.n); $("sh-ans").checked = sh.ans; $("sh-dir").value = sh.dir; $("sh-fs").value = String(sh.fs);
+  const r = buildSheet(); $("sheet-doc").innerHTML = r.html;
+}
+function readSheetOpts() { sh.a = $("sh-a").value; sh.hint = $("sh-hint").checked; sh.b = $("sh-b").checked; sh.c = $("sh-c").checked; sh.n = +$("sh-n").value || 0; sh.ans = $("sh-ans").checked; sh.dir = $("sh-dir").value; sh.fs = +$("sh-fs").value || 12; saveSh(); renderSheet(); }
+["sh-a", "sh-hint", "sh-b", "sh-c", "sh-n", "sh-ans", "sh-dir", "sh-fs"].forEach(id => $(id).addEventListener("change", readSheetOpts));
+$("sh-shuffle").onclick = () => { sh.seed = (sh.seed * 7 + 13) % 99991; saveSh(); renderSheet(); toast("出題を入れ替えました"); };
+$("sh-print").onclick = () => { readSheetOpts(); document.body.classList.add("print-sheet"); setTimeout(() => window.print(), 80); };
+window.addEventListener("afterprint", () => document.body.classList.remove("print-sheet"));
 
 /* ================= 初期化 ================= */
 const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => { layoutStage("b"); if (!$("presentation").hidden) layoutStage("p"); redrawAll(); }) : null;
