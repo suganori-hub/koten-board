@@ -265,7 +265,8 @@ function layoutStage(p) {
   stageScale[p] = s; wrap.style.width = STAGE_W * s + "px"; wrap.style.height = STAGE_H * s + "px"; host.style.transform = `scale(${s})`;
   return true;
 }
-const sizeSet = s => ({ o: s, t: Math.max(26, s * 0.75), w: Math.max(26, s * 0.5) });
+const RATIOS = [[0.75, 0.5], [0.65, 0.42], [0.55, 0.34]]; // 本文に対する 現代語訳・語句/文法の大きさ。解説が長くて本文が小さくなりすぎる時だけ、解説を少し小さくする
+const sizeSet = (s, k = 0) => ({ o: s, t: Math.max(16, s * RATIOS[k][0]), w: Math.max(16, s * RATIOS[k][1]) });
 const manualSizes = () => { const v = current.view; return { o: v.oPx || Math.round(lastFit.o), t: v.tPx || Math.round(lastFit.t), w: v.wPx || Math.round(lastFit.w) }; };
 function setSizes(host, z) { host.style.setProperty("--o-px", z.o + "px"); host.style.setProperty("--t-px", z.t + "px"); host.style.setProperty("--w-px", z.w + "px"); }
 function fitMax(lo, hi, ok) { if (ok(hi)) return hi; if (!ok(lo)) return lo; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ok(m)) lo = m; else hi = m; } return lo; }
@@ -287,17 +288,33 @@ function computePages(p, G) {
   while (a < G) { let b = a + 1, used = w[a]; while (b < G && used + gap + w[b] <= cap) { used += gap + w[b]; b++; } out.push([a, b]); a = b; }
   return out;
 }
+let adjusting = false;
 function fitStage(p) {
   const host = hostOf(p), v = current.view, wrap = $(p + "-groups");
   const vis = [...wrap.querySelectorAll(".grp")].filter(g => !g.classList.contains("off"));
   wrap.classList.remove("scroll");
   if (!vis.length) return;
-  if (!v.auto) { setSizes(host, manualSizes()); wrap.classList.add("scroll"); return; }
   const gap = parseFloat(getComputedStyle(wrap).columnGap) || 0, cap = wrap.clientWidth;
-  const ok = () => vis.reduce((a, g) => a + g.offsetWidth, 0) + gap * (vis.length - 1) <= cap + 1;
-  const s = fitMax(18, 320, x => { setSizes(host, sizeSet(x)); return ok(); });
-  const z = sizeSet(s); setSizes(host, z); lastFit = z;
-  if (!ok()) wrap.classList.add("scroll");
+  // 「選んだ文がすべて枠内に見えているか」を、実際の位置で確かめる（幅の合計だけでなく、はみ出しも検出）
+  const fits = () => {
+    if (vis.reduce((a, g) => a + g.offsetWidth, 0) + gap * (vis.length - 1) > cap + 1) return false;
+    const wr = wrap.getBoundingClientRect(), tol = 1.5 * (stageScale[p] || 1);
+    return vis.every(g => { const r = g.getBoundingClientRect(); return r.left >= wr.left - tol && r.right <= wr.right + tol && r.bottom <= wr.bottom + tol; });
+  };
+  if (!v.auto) { // 手動サイズ：指定が大きすぎて入りきらない時は、入る大きさまで自動で縮める（指定は最大値として扱う）
+    const m = manualSizes(), apply = pc => setSizes(host, { o: m.o * pc / 100, t: Math.max(12, m.t * pc / 100), w: Math.max(12, m.w * pc / 100) });
+    const pc = fitMax(8, 100, x => { apply(x); return fits(); });
+    apply(pc);
+    if (pc < 100 && adjusting) toast("これ以上大きくすると、選んだ文が入りきりません");
+    adjusting = false;
+    if (!fits()) wrap.classList.add("scroll");
+    return;
+  }
+  adjusting = false;
+  const best = RATIOS.map((_, k) => fitMax(10, 320, x => { setSizes(host, sizeSet(x, k)); return fits(); }));
+  let k = 0; while (k < RATIOS.length - 1 && best[k] < best[RATIOS.length - 1] * 0.85) k++; // 本文が15%以上大きくなるなら、解説を小さくする
+  const z = sizeSet(best[k], k); setSizes(host, z); lastFit = z;
+  if (!fits()) wrap.classList.add("scroll");
 }
 function pageOfStep(st, step) {
   if (!st.pages.length) return 0;
@@ -604,7 +621,7 @@ function setAuto(on) {
   v.auto = on; markDirty(); renderAll();
 }
 function adjust(kind, dir) {
-  if (!current) return; const v = current.view, f = dir > 0 ? 1.12 : 0.89;
+  if (!current) return; adjusting = true; const v = current.view, f = dir > 0 ? 1.12 : 0.89;
   if (v.auto) { v.oPx = Math.round(lastFit.o); v.tPx = Math.round(lastFit.t); v.wPx = Math.round(lastFit.w); v.auto = false; }
   if (kind === "o") v.oPx = clamp(Math.round((v.oPx || 64) * f), 24, 340);
   else { v.tPx = clamp(Math.round((v.tPx || 48) * f), 16, 260); v.wPx = clamp(Math.round((v.wPx || 30) * f), 14, 160); }
